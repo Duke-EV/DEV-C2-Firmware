@@ -17,27 +17,33 @@
 //   auto t = vehicle::getThrottleRaw();
 //
 
-#pragma once
+#pragma once //avoids initialization errors, only includes file onece
 #include <cstdint>
 #include <cstring>
-#include <functional>
-#include <atomic>
+#include <functional> //allows functions definition; callback
+#include <atomic> //allows "global" variables that can be read/written from multiple mcus
 
-namespace vehicle {
+namespace vehicle { //wraps code so that methods don't collide (instead of class bc only wnat one vehicle state and don't want to pass obj everywhere)
 
 //vehicle ids
 using CanId = uint32_t;
 
 enum : CanId {
-  ID_PERI_TO_COMMS   = 0x100,
+  ID_PERI            = 0x100, //peripherals heartbeat
   ID_PERI_TO_BEM     = 0x110,
-  ID_PERI_TO_MC      = 0x150,
-  ID_POWER_DIST      = 0x200,
-  ID_MOTOR_TELEMETRY = 0x300,
-  ID_THR_TO_MC       = 0x400,
-  ID_BEM_STATUS      = 0x500,
-  ID_EMERGENCY       = 0x001,
-  ID_HEARTBEAT_BASE  = 0x600  // example base — you may prefer one hb ID per node type
+  ID_PERI_TO_COMMS   = 0x120,
+  ID_PERI_TO_MC      = 0x130,
+
+  ID_PDB             = 0x200, //PDB heartbeat
+
+  ID_MOTOR           = 0x300, //motor controller heartbeat
+
+  ID_THR             = 0x400, //throttle heartbeat
+  ID_THR_TO_MOTOR    = 0x410,
+
+  ID_BEM             = 0x500, //battery entry module heartbeat
+
+  ID_EMERGENCY       = 0x001, //emergency stop
 };
 
 static constexpr uint32_t HEARTBEAT_HZ = 10;
@@ -284,7 +290,7 @@ inline void processRxQueue() {
 
     // Default decode - update owned variables
     switch (f.id) {
-      case ID_THR_TO_MC:
+      case ID_THR_TO_MOTOR:
         if (f.len >= sizeof(ThrottleMsg)) {
           ThrottleMsg t;
           memcpy(&t, f.data, sizeof(ThrottleMsg));
@@ -293,7 +299,7 @@ inline void processRxQueue() {
           s_throttle_raw.store(t.throttle_raw);
         }
         break;
-      case ID_MOTOR_TELEMETRY:
+      case ID_MOTOR:
         if (f.len >= sizeof(MotorTelemetry)) {
           MotorTelemetry m;
           memcpy(&m, f.data, sizeof(MotorTelemetry));
@@ -313,7 +319,9 @@ inline void processRxQueue() {
     }
 
     // Heartbeat detection: simple heuristic: if incoming ID is heartbeat kind, record it
-    if ((f.id & 0x700) == ID_HEARTBEAT_BASE) {
+    constexpr CanId HEARTBEAT_LOWBITS_MASK = 0xFF;
+    //use lower byte mask
+    if ((f.id & HEARTBEAT_LOWBITS_MASK) == 0x00) {
       // if you prefer distinct hb IDs, adapt here
       unsigned long now = vehicle_millis();
       // find or insert
@@ -330,7 +338,10 @@ inline void processRxQueue() {
     }
 
     // Call user handler
-    if (g_handler) g_handler(f.id, f.data, f.len);
+    if (g_handler) 
+      g_handler(f.id, f.data, f.len);
+
+
   }
 }
 
