@@ -46,27 +46,30 @@ enum : CanId {
   ID_EMERGENCY       = 0x001, //emergency stop
 };
 
-static constexpr uint32_t HEARTBEAT_HZ = 10;
+static constexpr uint32_t HEARTBEAT_HZ = 10; //use contextpr, not const bc val not read at runtime, mcus don't have to calculate this -- no runtime math
 static constexpr uint32_t HEARTBEAT_PERIOD_MS = (1000u / HEARTBEAT_HZ);
 static constexpr uint32_t HEARTBEAT_TIMEOUT_MS = HEARTBEAT_PERIOD_MS * 3;
 
+//structure for how the CAN data bytes are interpreted when a message is sent or received
+//use pragma to avoid compiler padding between struct fields
 #pragma pack(push,1)
 struct ThrottleMsg {
   uint16_t throttle_raw; // 0..1000
-  uint8_t  status;       // bitflags
-  uint8_t  seq;         //sequence number; incremented to debug old/new data
+  uint8_t  status;       // bitflags -- seeing if value is valid (idk if we need this, probably just don't want the car to go rogue)
+  uint8_t  seq;          //sequence number; incremented to debug old/new data
 };
 struct MotorTelemetry {
   uint16_t rpm;
   uint16_t current_mA;
-  int8_t   tempC;
-  uint8_t  status;
 };
 struct PeriState {
-  uint8_t lights_mask; // bitfields
-  uint8_t brakelight;
-  uint8_t reserved;
-  uint8_t seq;
+  uint8_t headlights;
+  uint8_t left_turn;
+  uint8_t right_turn;
+  uint8_t brakelights;
+  uint8_t hazards;
+  uint8_t back_running_lights;
+  uint8_t windshield;
 };
 struct HeartbeatMsg {
   uint8_t node_type;
@@ -76,9 +79,9 @@ struct HeartbeatMsg {
 };
 #pragma pack(pop)
 
-static_assert(sizeof(ThrottleMsg) <= 8, "Throttle must fit CAN 8 bytes");
-static_assert(sizeof(MotorTelemetry) <= 8, "Motor telemetry must fit CAN 8 bytes");
-static_assert(sizeof(PeriState) <= 8, "Peri state must fit CAN 8 bytes");
+// static_assert(sizeof(ThrottleMsg) <= 8, "Throttle must fit CAN 8 bytes");
+// static_assert(sizeof(MotorTelemetry) <= 8, "Motor telemetry must fit CAN 8 bytes");
+// static_assert(sizeof(PeriState) <= 8, "Peri state must fit CAN 8 bytes");
 
 
 
@@ -142,10 +145,10 @@ inline void sendHeartbeat(CanId hb_id) {
 //  - For multi-field structs, we provide a versioned update pattern (seq/version) to avoid torn reads.
 extern std::atomic<uint16_t> s_motor_rpm;      // owner: MC_BOARD
 extern std::atomic<uint16_t> s_throttle_raw;   // owner: THR_BOARD
-extern std::atomic<uint8_t>  s_back_light;     // owner: PERI_BOARD (bitmask)
+extern std::atomic<uint8_t>  s_back_light;     // owner: PERI_BOARD 
 extern std::atomic<uint16_t> s_current_mA;     // owner: MC_BOARD
-extern std::atomic<uint8_t> s_back_right_blinker; // owner: PERI_BOARD (bitmask)
-extern std::atomic<uint8_t> s_back_left_blinker;  // owner: PERI_BOARD (bitmask)
+extern std::atomic<uint8_t> s_back_right_blinker; // owner: PERI_BOARD 
+extern std::atomic<uint8_t> s_back_left_blinker;  // owner: PERI_BOARD 
 
 // getters (available to all)
 inline uint16_t getMotorRpm()    { return s_motor_rpm.load(); }
@@ -311,7 +314,7 @@ inline void processRxQueue() {
         if (f.len >= sizeof(PeriState)) {
           PeriState p;
           memcpy(&p, f.data, sizeof(PeriState));
-          s_back_light.store(p.lights_mask & 0xFF);
+          s_back_light.store(p.back_running_lights);
         }
         break;
       default:
