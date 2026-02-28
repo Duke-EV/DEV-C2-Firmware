@@ -1,0 +1,171 @@
+// motor_main.cpp
+// Main program for Motor Controller Board
+// Sends: Motor telemetry (RPM, current, temperature, status)
+// Receives: Throttle commands from Throttle board
+
+#define MC_BOARD  // Motor Controller board
+
+#include <Arduino.h>
+#include "../../Comms/CAN Network/vehicle.hpp"
+#include "../../Comms/CAN Network/flexcan_adapter.hpp"
+
+FlexCANAdapter canAdapter;
+
+// Motor state variables
+uint16_t motorRpm = 0;
+// uint16_t motorCurrent_mA = 0;
+// uint16_t motorTemp_C = 25;  // Default temp
+// uint8_t motorStatus = 0;
+
+// // Throttle input from CAN
+// uint16_t receivedThrottle = 0;
+// uint8_t throttleStatus = 0;
+
+// Timing variables
+unsigned long lastHeartbeat = 0;
+unsigned long lastTelemetry = 0;
+// unsigned long lastThrottleReceived = 0;
+
+// Message handler - receives throttle commands
+void handleCanMessage(vehicle::CanId id, const uint8_t* data, uint8_t len) {
+  switch(id) {
+    case vehicle::ID_THR_TO_MOTOR: {
+      // Receive throttle command from Throttle board
+      if (len >= sizeof(vehicle::ThrottleMsg)) {
+        vehicle::ThrottleMsg t;
+        memcpy(&t, data, sizeof(t));
+        
+        receivedThrottle = t.throttle_raw;
+        throttleStatus = t.status;
+        lastThrottleReceived = millis();
+        
+        // Serial.print("[RX] Throttle command: ");
+        // Serial.print(t.throttle_raw);
+        // Serial.print("/1000");
+        
+        // Simulate motor response: RPM based on throttle
+        // Max RPM = 5000, scales with throttle (0-1000)
+        motorRpm = (t.throttle_raw * 5000UL) / 1000;
+        
+        // // Simulate current draw: higher throttle = higher current
+        // // Base current 100mA, max 50A (50000mA)
+        // motorCurrent_mA = 100 + (t.throttle_raw * 50000UL) / 1000;
+        
+        Serial.print(" -> RPM: ");
+        Serial.print(motorRpm);
+        // Serial.print(", Current: ");
+        // Serial.print(motorCurrent_mA);
+        // Serial.println(" mA");
+      }
+      break;
+    }
+    
+    // case vehicle::ID_PERI:
+    //   Serial.println("[RX] Peripherals heartbeat");
+    //   break;
+      
+    // case vehicle::ID_THR:
+    //   Serial.println("[RX] Throttle heartbeat");
+    //   break;
+      
+    // case vehicle::ID_EMERGENCY:
+    //   Serial.println("[RX] !!! EMERGENCY STOP !!!");
+    //   motorRpm = 0;
+    //   // motorCurrent_mA = 0;
+    //   break;
+      
+    default:
+      break;
+  }
+}
+
+// NOTE TO MOTOR CONTROLLER: use function to calculate RPM/wheel speed
+// comment out/delete "void handleCanMessage()" above
+uint16_t calculateRpm(uint16_t throttle_raw) {
+    // example calculation
+    Simulate motor response: RPM based on throttle
+    Max RPM = 5000, scales with throttle (0-1000)
+    return (throttle_raw * 5000UL) / 1000;
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(2000);
+  Serial.println("Motor Controller Board Starting");
+  Serial.println();
+  
+  // Initialize CAN bus
+  vehicle::init(&canAdapter);
+  
+  // Register message handler
+  vehicle::registerRxHandler(handleCanMessage);
+  
+  Serial.println("CAN bus initialized at 500 kbps");
+  Serial.println("Motor Controller ready");
+  // Serial.println("Waiting for throttle commands...");
+  Serial.println();
+  
+  // Set initial motor state
+  vehicle::setMotorRpm(0);
+  //vehicle::setCurrent_mA(0);
+}
+
+void loop() {
+  unsigned long now = millis();
+  
+  // CRITICAL: Process FlexCAN events
+  canAdapter.events();
+  
+  // CRITICAL: Process received messages
+  vehicle::processRxQueue();
+  
+  // Update motor state atomics
+  vehicle::setMotorRpm(motorRpm);
+  //vehicle::setCurrent_mA(motorCurrent_mA);
+  
+  // Send heartbeat every 1000ms
+  if (now - lastHeartbeat >= vehicle::HEARTBEAT_PERIOD_MS) {
+    lastHeartbeat = now;
+    vehicle::sendHeartbeat(vehicle::ID_MOTOR);
+  }
+
+  // Send vehicle out every 1000ms
+    // Update RPM
+    motorRpm = calculateRpm(throttleInput);
+
+    // Send RPM over CAN
+    vehicle::setMotorRpm(motorRpm);
+    vehicle::sendMotorTelemetry();
+  
+  // // Send motor telemetry every 50ms (20Hz)
+  // if (now - lastTelemetry >= 50) {
+  //   lastTelemetry = now;
+    
+  //   if (vehicle::sendMotorTelemetry()) {
+  //     // Telemetry sent successfully
+  //   } else {
+  //     Serial.println("[TX ERROR] Failed to send motor telemetry");
+  //   }
+  // }
+  
+  // // Check for throttle timeout (500ms)
+  // if (receivedThrottle > 0 && (now - lastThrottleReceived > 500)) {
+  //   Serial.println("[WARNING] Throttle timeout - stopping motor");
+  //   receivedThrottle = 0;
+  //   motorRpm = 0;
+  //   motorCurrent_mA = 0;
+  // }
+  
+  // // Simulate temperature increase with load
+  // static unsigned long lastTempUpdate = 0;
+  // if (now - lastTempUpdate >= 1000) {
+  //   lastTempUpdate = now;
+    
+  //   // Temperature increases with current
+  //   if (motorCurrent_mA > 10000) {
+  //     motorTemp_C = min(100, motorTemp_C + 1);  // Heat up
+  //   } else if (motorTemp_C > 25) {
+  //     motorTemp_C--;  // Cool down
+  //   }
+  // }
+}

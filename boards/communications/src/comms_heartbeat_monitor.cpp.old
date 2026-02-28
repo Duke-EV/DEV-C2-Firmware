@@ -1,0 +1,119 @@
+// comms_heartbeat_monitor.cpp
+// COMMS Board (ESP32) - Receive-only heartbeat monitor
+// Receives: Heartbeats from all boards
+// Sends: NOTHING
+
+#define COMMS_BOARD
+
+#include <Arduino.h>
+#include "../CAN Network/vehicle.hpp"
+#include "../CAN Network/esp32_can_adapter.hpp"
+
+ESP32CANAdapter canAdapter;
+
+// Heartbeat tracking
+struct BoardStatus {
+  const char* name;
+  vehicle::CanId heartbeat_id;
+  unsigned long last_seen;
+  bool alive;
+};
+
+BoardStatus boards[] = {
+  {"Peripherals", vehicle::ID_PERI,  0, false},
+  {"PDB",         vehicle::ID_PDB,   0, false},
+  {"Motor",       vehicle::ID_MOTOR, 0, false},
+  {"Throttle",    vehicle::ID_THR,   0, false},
+  {"BEM",         vehicle::ID_BEM,   0, false},
+};
+const int NUM_BOARDS = sizeof(boards) / sizeof(boards[0]);
+
+unsigned long lastDashboard = 0;
+
+// Receive handler: called for every received CAN frame (after processRxQueue)
+void handleCanMessage(vehicle::CanId id, const uint8_t* data, uint8_t len) {
+  const unsigned long now = millis();
+
+  // Is this a heartbeat from a known board?
+  for (int i = 0; i < NUM_BOARDS; i++) {
+    if (id == boards[i].heartbeat_id) {
+      boards[i].last_seen = now;
+      boards[i].alive = true;
+
+      // Optional: decode heartbeat payload (fw = firmware version)
+      if (len >= sizeof(vehicle::HeartbeatMsg)) {
+        vehicle::HeartbeatMsg hb;
+        memcpy(&hb, data, sizeof(hb));
+
+        Serial.print("[HB] ");
+        Serial.print(boards[i].name);
+        Serial.print(" alive | fw=");
+        Serial.print(hb.fw_major);
+        Serial.print(".");
+        Serial.print(hb.fw_minor);
+        Serial.print(" node_type=");
+        Serial.print(hb.node_type);
+        Serial.print(" status=0x");
+        Serial.println(hb.status, HEX);
+      } else {
+        Serial.print("[HB] ");
+        Serial.print(boards[i].name);
+        Serial.println(" alive (payload too short)");
+      }
+      return; // done
+    }
+  }
+
+  // Ignore all non-heartbeat frames (or log if you want)
+  // Serial.printf("[IGN] 0x%03X len=%u\n", (unsigned)id, len);
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(1500);
+
+  Serial.println("========================================");
+  Serial.println("  COMMS (ESP32) Heartbeat Monitor");
+  Serial.println("   RECEIVE ONLY (no TX)");
+  Serial.println("========================================");
+
+  vehicle::init(&canAdapter);
+  vehicle::registerRxHandler(handleCanMessage);
+
+  Serial.println("CAN initialized at 500 kbps.");
+  Serial.println("Listening for heartbeats...");
+}
+
+void loop() {
+  const unsigned long now = millis();
+
+  // Receive path
+  canAdapter.poll();
+  vehicle::processRxQueue();
+
+  // Health check + dashboard every 1 second
+  if (now - lastDashboard >= 1000) {
+    lastDashboard = now;
+
+    Serial.println();
+    Serial.println("=== HEARTBEAT STATUS ===");
+    for (int i = 0; i < NUM_BOARDS; i++) {
+      // Mark offline if timed out
+      if (boards[i].alive && (now - boards[i].last_seen > vehicle::HEARTBEAT_TIMEOUT_MS)) {
+        boards[i].alive = false;
+      }
+
+      Serial.print("  ");
+      Serial.print(boards[i].name);
+      Serial.print(": ");
+      if (boards[i].alive) {
+        Serial.print("ALIVE (");
+        Serial.print(now - boards[i].last_seen);
+        Serial.println(" ms ago)");
+      } else {
+        Serial.println("OFFLINE");
+      }
+    }
+    Serial.println("========================");
+  }
+}
