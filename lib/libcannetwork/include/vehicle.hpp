@@ -74,7 +74,7 @@ private:
 
   // Private methods common between architectures
 private:
-  void send_message();
+  void send_message(uint32_t id, uint8_t len, const uint8_t *data);
   void send_all();
   void on_receive(uint32_t id, uint8_t len, const uint8_t *data);
 
