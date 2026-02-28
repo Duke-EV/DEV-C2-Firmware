@@ -24,6 +24,7 @@ enum DevBoard {
   MOTOR_CONTROLLER,
   POWER_DISTRIBUTION,
   THROTTLE,
+  JOULEMETER,
   // Number of designs this library is using
   BOARD_COUNT
 };
@@ -44,16 +45,23 @@ private:
 #endif
 
 public:
-  uint32_t m_motor_rpm;
-  float m_ground_speed_kph;
-  // NOTE: use Raw values if the number on the network might
-  // not be representative of a value with a proper unit (this
-  // is something you can decide and design) Example would be
-  // an ADC value versus a temperature
-  uint16_t m_battery_soc_raw;
-  float m_battery_soc;
-  // TODO: list all known values to be shared
+  uint8_t m_peripherals_windshield;
+  uint8_t m_peripherals_backrunninglights;
+  uint8_t m_peripherals_turn;
+  uint8_t m_peripherals_headlights;
+  uint8_t m_peripherals_brakelights;
+  uint8_t m_peripherals_hazard;
 
+  uint16_t m_pdb_current;
+  uint16_t m_pdb_voltage;
+  
+  uint32_t m_motor_rpm;
+  
+  uint16_t m_throttle_percentage;
+  
+  uint16_t m_joulemeter_current;
+  uint16_t m_joulemeter_voltage;
+  uint32_t m_joulemeter_energy;
   // Private methods unique to architecture for sending/receiving can messages
 private:
 #if defined(ARDUINO_ARCH_ESP32)
