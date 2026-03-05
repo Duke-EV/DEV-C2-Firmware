@@ -63,7 +63,7 @@ void Vehicle::send_all() {
   // repeat for all messages defined for this board
   switch (m_board) {
   case PERIPHERALS:
-    uint8_t* data = new uint8_t[8];
+    uint8_t data[8];
     data[0] = g_vehicle.m_peripherals_windshield;
     data[1] = g_vehicle.m_peripherals_backrunninglights;
     data[2] = g_vehicle.m_peripherals_turn;
@@ -75,7 +75,7 @@ void Vehicle::send_all() {
     break;
   
   case POWER_DISTRIBUTION:
-    uint8_t* data = new uint8_t[8];
+    uint8_t data[8];
     data[0] = (g_vehicle.m_pdb_current >> 8) & 0xFF;
     data[1] = g_vehicle.m_pdb_current & 0xFF;
     data[2] = (g_vehicle.m_pdb_voltage >> 8) & 0xFF;
@@ -85,7 +85,7 @@ void Vehicle::send_all() {
     break;
 
   case MOTOR_CONTROLLER:
-    uint8_t* data = new uint8_t[8];
+    uint8_t data[8];
 
     data[0] = (g_vehicle.m_motor_rpm >> 24) & 0xFF;
     data[1] = (g_vehicle.m_motor_rpm >> 16) & 0xFF;
@@ -96,7 +96,8 @@ void Vehicle::send_all() {
     break;
     
   case THROTTLE:
-    uint8_t* data = new uint8_t[8];
+    uint8_t data;
+
     data[0] = (g_vehicle.m_throttle_percentage >> 8) & 0xFF;
     data[1] = g_vehicle.m_throttle_percentage & 0xFF;
 
@@ -104,7 +105,7 @@ void Vehicle::send_all() {
     break;
     
   case JOULEMETER:
-    uint8_t* data = new uint8_t[8];
+    uint8_t data[8];
     data[0] = (g_vehicle.m_joulemeter_current >> 8) & 0xFF;
     data[1] = g_vehicle.m_joulemeter_current & 0xFF;
     data[2] = (g_vehicle.m_joulemeter_voltage >> 8) & 0xFF;
@@ -148,6 +149,9 @@ void Vehicle::on_receive(uint32_t id, uint8_t len, const uint8_t *data) {
     // send(0x100, 8, (char*)&my_motor_rpm); //EVIL
     // //receiving side
     // my_motor_rpm = *data; //UNKNOWN ENDIANNESS
+    g_vehicle.m_peripherals_windshield = data[0];
+    g_vehicle.m_peripherals_backrunninglights = data[1];
+    g_vehicle.m_peripherals_turn = data[2];
     break;
   case 0x101:
     switch (data[0]) {
