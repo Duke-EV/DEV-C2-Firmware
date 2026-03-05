@@ -62,13 +62,6 @@ void Vehicle::send_all() {
   // send_message() for the ID and data necessary
   // repeat for all messages defined for this board
   switch (m_board) {
-  case COMMUNICATIONS:
-    // TODO:
-    // construct a stack array of bytes for the message being sent
-    // send_message() for the ID and data necessary
-    // repeat for all messages defined for this board
-    break;
-    
   case PERIPHERALS:
     uint8_t* data = new uint8_t[8];
     data[0] = g_vehicle.m_peripherals_windshield;
@@ -78,73 +71,57 @@ void Vehicle::send_all() {
     data[4] = g_vehicle.m_peripherals_brakelights;
     data[5] = g_vehicle.m_peripherals_hazard;
 
-    g_vehicle.send_message(256, 8, data);
+    g_vehicle.send_message(0x100, 8, data);
     break;
-    
-  case MOTOR_CONTROLLER:
-    uint8_t rpm_high_byte = (g_vehicle.m_motor_rpm >> 24) & 0xFF;
-    uint8_t rpm_second_byte = (g_vehicle.m_motor_rpm >> 16) & 0xFF;
-    uint8_t rpm_third_byte = (g_vehicle.m_motor_rpm >> 8) & 0xFF;
-    uint8_t rpm_low_byte = g_vehicle.m_motor_rpm & 0xFF;
-
-    uint8_t* data = new uint8_t[8];
-
-    data[0] = rpm_high_byte;
-    data[1] = rpm_second_byte;
-    data[2] = rpm_third_byte;
-    data[3] = rpm_low_byte;
-
-    g_vehicle.send_message(768, 8, data);
-    break;
+  
   case POWER_DISTRIBUTION:
-    uint8_t current_high_byte = (g_vehicle.m_pdb_current >> 8) & 0xFF;
-    uint8_t current_low_byte = g_vehicle.m_pdb_current & 0xFF;
-    uint8_t voltage_high_byte = (g_vehicle.m_pdb_voltage >> 8) & 0xFF;
-    uint8_t voltage_low_byte = g_vehicle.m_pdb_voltage & 0xFF;
-    
     uint8_t* data = new uint8_t[8];
-    data[0] = current_high_byte;
-    data[1] = current_low_byte;
-    data[2] = voltage_high_byte;
-    data[3] = voltage_low_byte;
+    data[0] = (g_vehicle.m_pdb_current >> 8) & 0xFF;
+    data[1] = g_vehicle.m_pdb_current & 0xFF;
+    data[2] = (g_vehicle.m_pdb_voltage >> 8) & 0xFF;
+    data[3] = g_vehicle.m_pdb_voltage & 0xFF;
     
-    g_vehicle.send_message(1280, 8, data);
+    g_vehicle.send_message(0x200, 8, data);
+    break;
+
+  case MOTOR_CONTROLLER:
+    uint8_t* data = new uint8_t[8];
+
+    data[0] = (g_vehicle.m_motor_rpm >> 24) & 0xFF;
+    data[1] = (g_vehicle.m_motor_rpm >> 16) & 0xFF;
+    data[2] = (g_vehicle.m_motor_rpm >> 8) & 0xFF;
+    data[3] = g_vehicle.m_motor_rpm & 0xFF;
+
+    g_vehicle.send_message(0x300, 8, data);
     break;
     
   case THROTTLE:
-    uint8_t high_byte = (g_vehicle.m_throttle_percentage >> 8) & 0xFF;
-    uint8_t low_byte = g_vehicle.m_throttle_percentage & 0xFF;
-
     uint8_t* data = new uint8_t[8];
-    data[0] = high_byte;
-    data[1] = low_byte;
+    data[0] = (g_vehicle.m_throttle_percentage >> 8) & 0xFF;
+    data[1] = g_vehicle.m_throttle_percentage & 0xFF;
 
-    g_vehicle.send_message(1024, 8, data);
+    g_vehicle.send_message(0x400, 8, data);
     break;
     
   case JOULEMETER:
-    uint8_t current_high_byte = (g_vehicle.m_joulemeter_current >> 8) & 0xFF;
-    uint8_t current_low_byte = g_vehicle.m_joulemeter_current & 0xFF;
-    
-    uint8_t voltage_high_byte = (g_vehicle.m_joulemeter_voltage >> 8) & 0xFF;
-    uint8_t voltage_low_byte = g_vehicle.m_joulemeter_voltage & 0xFF;
-
-    uint8_t energy_high_byte = (g_vehicle.m_joulemeter_energy >> 24) & 0xFF;
-    uint8_t energy_second_byte = (g_vehicle.m_joulemeter_energy >> 16) & 0xFF;
-    uint8_t energy_third_byte = (g_vehicle.m_joulemeter_energy >> 8) & 0xFF;
-    uint8_t energy_low_byte = g_vehicle.m_joulemeter_energy & 0xFF;
-    
     uint8_t* data = new uint8_t[8];
-    data[0] = current_high_byte;
-    data[1] = current_low_byte;
-    data[2] = voltage_high_byte;
-    data[3] = voltage_low_byte;
-    data[4] = energy_high_byte;
-    data[5] = energy_second_byte;
-    data[6] = energy_third_byte;
-    data[7] = energy_low_byte;
+    data[0] = (g_vehicle.m_joulemeter_current >> 8) & 0xFF;
+    data[1] = g_vehicle.m_joulemeter_current & 0xFF;
+    data[2] = (g_vehicle.m_joulemeter_voltage >> 8) & 0xFF;
+    data[3] = g_vehicle.m_joulemeter_voltage & 0xFF;
+    data[4] = (g_vehicle.m_joulemeter_energy >> 24) & 0xFF;
+    data[5] = (g_vehicle.m_joulemeter_energy >> 16) & 0xFF;
+    data[6] = (g_vehicle.m_joulemeter_energy >> 8) & 0xFF;
+    data[7] = g_vehicle.m_joulemeter_energy & 0xFF;
     
-    g_vehicle.send_message(1280, 8, data);
+    g_vehicle.send_message(0x500, 8, data);
+    break;
+
+  case COMMUNICATIONS:
+    // TODO:
+    // construct a stack array of bytes for the message being sent
+    // send_message() for the ID and data necessary
+    // repeat for all messages defined for this board
     break;
     
   default:
