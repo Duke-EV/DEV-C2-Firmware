@@ -152,17 +152,24 @@ void Vehicle::on_receive(uint32_t id, uint8_t len, const uint8_t *data) {
     g_vehicle.m_peripherals_windshield = data[0];
     g_vehicle.m_peripherals_backrunninglights = data[1];
     g_vehicle.m_peripherals_turn = data[2];
+    g_vehicle.m_peripherals_headlights = data[3];
+    g_vehicle.m_peripherals_brakelights = data[4];
+    g_vehicle.m_peripherals_hazard = data[5];
     break;
-  case 0x101:
-    switch (data[0]) {
-    case 0:
-      break;
-    case 1:
-      break;
-    default:
-      break;
-    }
+  case 0x200:
+    g_vehicle.m_pdb_current = (data[0] << 8) | data[1];
+    g_vehicle.m_pdb_voltage = (data[2] << 8) | data[3];
     break;
+  case 0x300:
+    g_vehicle.m_motor_rpm = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | (data[3]);
+    break;
+  case 0x400:
+    g_vehicle.m_throttle_percentage = (data[0] << 8) | data[1];
+    break;
+  case 0x500:
+    g_vehicle.m_joulemeter_current = (data[0] << 8) | data[1];
+    g_vehicle.m_joulemeter_voltage = (data[2] << 8) | data[3];
+    g_vehicle.m_joulemeter_energy = (data[4] << 24) | (data[5] << 16) | (data[6] << 8) | (data[7]);
   default:
     break;
   }
