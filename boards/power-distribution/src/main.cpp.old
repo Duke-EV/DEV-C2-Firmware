@@ -1,0 +1,76 @@
+// pdb_main.cpp
+// Main program for Power Distribution Board (PDB)
+// Sends: Heartbeat (power system monitoring in future)
+// Receives: Emergency stop commands
+
+#define PDB_BOARD  // Power Distribution Board
+
+#include <Arduino.h>
+#include "../../Comms/CAN Network/vehicle.hpp"
+#include "../../Comms/CAN Network/flexcan_adapter.hpp"
+
+FlexCANAdapter canAdapter;
+
+// Timing variables
+unsigned long lastHeartbeat = 0;
+unsigned long lastStatusPrint = 0;
+
+// PDB state (placeholder for future power monitoring)
+bool powerSystemOk = true;
+
+// Message handler
+void handleCanMessage(vehicle::CanId id, const uint8_t* data, uint8_t len) {
+  switch(id) {
+    case vehicle::ID_EMERGENCY:
+      Serial.println("[RX] !!! EMERGENCY STOP - CUTTING POWER !!!");
+      powerSystemOk = false;
+      // In real implementation: cut power to motor controller
+      break;
+      
+    default:
+      break;
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(2000);
+  
+  Serial.println("========================================");
+  Serial.println("  Power Distribution Board Starting");
+  Serial.println("========================================");
+  Serial.println();
+  
+  // Initialize CAN bus
+  vehicle::init(&canAdapter);
+  
+  // Register message handler
+  vehicle::registerRxHandler(handleCanMessage);
+  
+  Serial.println("CAN bus initialized at 500 kbps");
+  Serial.println("PDB ready - Power system OK");
+  Serial.println();
+}
+
+void loop() {
+  unsigned long now = millis();
+  
+  // CRITICAL: Process FlexCAN events
+  canAdapter.events();
+  
+  // CRITICAL: Process received messages
+  vehicle::processRxQueue();
+  
+  // Send heartbeat every 100ms
+  if (now - lastHeartbeat >= vehicle::HEARTBEAT_PERIOD_MS) {
+    lastHeartbeat = now;
+    vehicle::sendHeartbeat(vehicle::ID_PDB);
+  }
+  
+  // Status print every 5 seconds
+  if (now - lastStatusPrint >= 5000) {
+    lastStatusPrint = now;
+    Serial.print("Power System: ");
+    Serial.println(powerSystemOk ? "OK" : "EMERGENCY STOP");
+  }
+}

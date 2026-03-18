@@ -1,0 +1,347 @@
+// comms_main.cpp
+// Main program for Communications Board (ESP32-DevKit-C V4)
+// Receives data from all boards and provides telemetry/monitoring
+// Supports WiFi connectivity for remote monitoring
+
+#define COMMS_BOARD  // Define board type
+
+#include <Arduino.h>
+#include <WiFi.h>
+#include "../CAN Network/vehicle.hpp"
+#include "../CAN Network/esp32_can_adapter.hpp"
+
+// WiFi credentials (update these for your network)
+const char* WIFI_SSID = "DukeEV";
+const char* WIFI_PASSWORD = "your_password_here";
+
+// Create ESP32 CAN adapter instance
+ESP32CANAdapter canAdapter;
+
+// Timing variables
+unsigned long lastHeartbeat = 0;
+unsigned long lastTelemetryPrint = 0;
+
+// Heartbeat tracking for each board
+struct BoardStatus {
+  const char* name;
+  vehicle::CanId heartbeat_id;
+  unsigned long last_seen;
+  bool alive;
+};
+
+BoardStatus boards[] = {
+  {"Peripherals", vehicle::ID_PERI, 0, false},
+  {"PDB",         vehicle::ID_PDB,  0, false},
+  {"Motor",       vehicle::ID_MOTOR, 0, false},
+  {"Throttle",    vehicle::ID_THR,   0, false},
+  {"BEM",         vehicle::ID_BEM,   0, false}
+};
+const int NUM_BOARDS = sizeof(boards) / sizeof(boards[0]);
+
+// Data storage for dashboard display
+struct CommsData {
+  // Peripherals Board (0x100)
+  uint8_t headlights;
+  uint8_t front_left_turn;
+  uint8_t front_right_turn;
+  uint8_t front_hazards;
+  uint8_t windshield;
+  uint8_t back_running_lights;
+  uint8_t back_left_blinker;
+  uint8_t back_right_blinker;
+  
+  // Motor Controller (0x300)
+  uint16_t motor_rpm;
+  uint16_t motor_current_mA;
+  uint16_t motor_temp_C;
+  uint8_t motor_status;
+  
+  // Throttle (0x400)
+  uint16_t throttle_raw;
+  uint8_t throttle_status;
+  
+  // Power Distribution Board (0x200) - for future use
+  
+  // BEM (0x500) - for future use
+} commsData = {};  // Zero-initialize all fields
+
+// Message handler - called for every received CAN message
+void handleCanMessage(vehicle::CanId id, const uint8_t* data, uint8_t len) {
+  unsigned long now = millis();
+  
+  // Update heartbeat tracking
+  for (int i = 0; i < NUM_BOARDS; i++) {
+    if (id == boards[i].heartbeat_id) {
+      boards[i].last_seen = now;
+      boards[i].alive = true;
+      
+      Serial.print("[HB] ");
+      Serial.print(boards[i].name);
+      Serial.println(" board alive");
+      return;
+    }
+  }
+  
+  // Decode and store message data
+  switch(id) {
+    case vehicle::ID_THR_TO_MOTOR: {
+      // Throttle value from THR board to Motor Controller
+      if (len >= sizeof(vehicle::ThrottleMsg)) {
+        vehicle::ThrottleMsg t;
+        memcpy(&t, data, sizeof(t));
+        commsData.throttle_raw = t.throttle_raw;
+        commsData.throttle_status = t.status;
+        
+        Serial.print("[THR→MC] Throttle: ");
+        Serial.print(t.throttle_raw);
+        Serial.print("/1000");
+        if (t.status != 0) {
+          Serial.print(" | Status: 0x");
+          Serial.print(t.status, HEX);
+        }
+        Serial.println();
+      }
+      break;
+    }
+      
+    case vehicle::ID_MOTOR_TELEMETRY: {
+      // Motor Controller telemetry: RPM, current, temp, status
+      if (len >= sizeof(vehicle::MotorTelemetry)) {
+        vehicle::MotorTelemetry mt;
+        memcpy(&mt, data, sizeof(mt));
+        commsData.motor_rpm = mt.rpm;
+        commsData.motor_current_mA = mt.current_mA;
+        commsData.motor_temp_C = mt.tempC;
+        commsData.motor_status = mt.status;
+        
+        Serial.print("[MOTOR] RPM: ");
+        Serial.print(mt.rpm);
+        Serial.print(" | Current: ");
+        Serial.print(mt.current_mA);
+        Serial.print(" mA");
+        if (mt.tempC > 0) {
+          Serial.print(" | Temp: ");
+          Serial.print(mt.tempC);
+          Serial.print(" C");
+        }
+        if (mt.status != 0) {
+          Serial.print(" | Status: 0x");
+          Serial.print(mt.status, HEX);
+        }
+        Serial.println();
+      }
+      break;
+    }
+      
+    case vehicle::ID_PERI_TO_COMMS: {
+      // Peripherals Board state: lights, turn signals, hazards, windshield
+      if (len >= sizeof(vehicle::PeriState)) {
+        vehicle::PeriState p;
+        memcpy(&p, data, sizeof(p));
+        commsData.headlights = p.headlights;
+        commsData.front_left_turn = p.left_turn;
+        commsData.front_right_turn = p.right_turn;
+        commsData.front_hazards = p.hazards;
+        commsData.windshield = p.windshield;
+        commsData.back_running_lights = p.back_running_lights;
+        
+        Serial.print("[PERI→COMMS] ");
+        Serial.print("Headlights: ");
+        Serial.print(p.headlights ? "ON" : "OFF");
+        Serial.print(" | L-Turn: ");
+        Serial.print(p.left_turn ? "ON" : "OFF");
+        Serial.print(" | R-Turn: ");
+        Serial.print(p.right_turn ? "ON" : "OFF");
+        Serial.print(" | Hazards: ");
+        Serial.print(p.hazards ? "ON" : "OFF");
+        Serial.print(" | Backlights: ");
+        Serial.print(p.back_running_lights ? "ON" : "OFF");
+        Serial.print(" | Windshield: ");
+        Serial.println(p.windshield ? "ON" : "OFF");
+      }
+      break;
+    }
+      
+    case vehicle::ID_PERI_TO_MC:
+      Serial.println("[PERI→MC] Brake status");
+      break;
+      
+    case vehicle::ID_PERI_TO_BEM:
+      Serial.println("[PERI→BEM] Horn/other");
+      break;
+      
+    case vehicle::ID_EMERGENCY:
+      Serial.println("!!! EMERGENCY STOP !!!");
+      break;
+      
+    default:
+      // Log unknown messages
+      Serial.print("[UNKNOWN] ID: 0x");
+      Serial.print(id, HEX);
+      Serial.print(" | Data: ");
+      for (int i = 0; i < len; i++) {
+        if (data[i] < 0x10) Serial.print("0");
+        Serial.print(data[i], HEX);
+        Serial.print(" ");
+      }
+      Serial.println();
+      break;
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(2000);  // Wait for serial monitor
+  
+  Serial.println("========================================");
+  Serial.println("    Communications Board Starting");
+  Serial.println("========================================");
+  Serial.println();
+  
+  // Initialize CAN bus
+  vehicle::init(&canAdapter);
+  
+  // Register message handler
+  vehicle::registerRxHandler(handleCanMessage);
+  
+  Serial.println("CAN bus initialized at 500 kbps");
+  Serial.println("Monitoring all boards...");
+  Serial.println();
+}
+
+void loop() {
+  unsigned long now = millis();
+  
+  // CRITICAL: Poll ESP32 CAN for received messages
+  canAdapter.poll();
+  
+  // CRITICAL: Process received messages
+  vehicle::processRxQueue();
+  
+  // Send our heartbeat every 100ms
+  if (now - lastHeartbeat >= vehicle::HEARTBEAT_PERIOD_MS) {
+    lastHeartbeat = now;
+    vehicle::sendHeartbeat(vehicle::ID_PERI);  // TODO: Add ID_COMMS
+  }
+  
+  // Check board health every second
+  static unsigned long lastHealthCheck = 0;
+  if (now - lastHealthCheck >= 1000) {
+    lastHealthCheck = now;
+    
+    bool anyDead = false;
+    for (int i = 0; i < NUM_BOARDS; i++) {
+      // Check if heartbeat timeout
+      if (boards[i].alive && (now - boards[i].last_seen > vehicle::HEARTBEAT_TIMEOUT_MS)) {
+        boards[i].alive = false;
+        Serial.print("WARNING: ");
+        Serial.print(boards[i].name);
+        Serial.println(" board not responding!");
+        anyDead = true;
+      }
+    }
+    
+    if (!anyDead) {
+      // Optionally print "all good" status
+      // Serial.println("All boards responding");
+    }
+  }
+  
+  // Print telemetry summary every 5 seconds
+  if (now - lastTelemetryPrint >= 5000) {
+    lastTelemetryPrint = now;
+    
+    Serial.println();
+    Serial.println("=========== VEHICLE STATUS DASHBOARD ===========");
+    
+    // WiFi Status
+    Serial.println("\n[CONNECTIVITY]");
+    Serial.print("  WiFi: ");
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.print("Connected (");
+      Serial.print(WiFi.localIP());
+      Serial.print(") RSSI: ");
+      Serial.print(WiFi.RSSI());
+      Serial.println(" dBm");
+    } else {
+      Serial.println("Disconnected");
+    }
+    
+    // Board Heartbeat Status
+    Serial.println("\n[BOARD HEARTBEATS]");
+    for (int i = 0; i < NUM_BOARDS; i++) {
+      Serial.print("  ");
+      Serial.print(boards[i].name);
+      Serial.print(": ");
+      if (boards[i].alive) {
+        Serial.print("✓ ALIVE");
+        unsigned long timeSince = now - boards[i].last_seen;
+        Serial.print(" (");
+        Serial.print(timeSince);
+        Serial.println(" ms ago)");
+      } else {
+        Serial.println("✗ OFFLINE");
+      }
+    }
+    
+    // Peripherals Board (0x100)
+    Serial.println("\n[PERIPHERALS BOARD - 0x100]");
+    Serial.print("  Headlights: ");
+    Serial.println(commsData.headlights ? "ON" : "OFF");
+    Serial.print("  Front Turn Signals: L=");
+    Serial.print(commsData.front_left_turn ? "ON" : "OFF");
+    Serial.print(", R=");
+    Serial.println(commsData.front_right_turn ? "ON" : "OFF");
+    Serial.print("  Front Hazards: ");
+    Serial.println(commsData.front_hazards ? "ON" : "OFF");
+    Serial.print("  Windshield: ");
+    Serial.println(commsData.windshield ? "ON" : "OFF");
+    Serial.print("  Back Running Lights: ");
+    Serial.println(commsData.back_running_lights ? "ON" : "OFF");
+    
+    // Power Distribution Board (0x200)
+    Serial.println("\n[POWER DISTRIBUTION BOARD - 0x200]");
+    Serial.println("  (No telemetry data defined yet)");
+    
+    // Motor Controller (0x300)
+    Serial.println("\n[MOTOR CONTROLLER - 0x300]");
+    Serial.print("  Current Sensing: ");
+    Serial.print(commsData.motor_current_mA);
+    Serial.println(" mA");
+    Serial.print("  Power Consumption: ");
+    // Assuming ~48V nominal battery voltage for power calculation
+    float power_W = (commsData.motor_current_mA / 1000.0) * 48.0;
+    Serial.print(power_W, 1);
+    Serial.println(" W");
+    Serial.print("  RPM: ");
+    Serial.println(commsData.motor_rpm);
+    if (commsData.motor_temp_C > 0) {
+      Serial.print("  Temperature: ");
+      Serial.print(commsData.motor_temp_C);
+      Serial.println(" °C");
+    }
+    if (commsData.motor_status != 0) {
+      Serial.print("  Status Flags: 0x");
+      Serial.println(commsData.motor_status, HEX);
+    }
+    
+    // Throttle Board (0x400)
+    Serial.println("\n[THROTTLE BOARD - 0x400]");
+    Serial.print("  Throttle Value: ");
+    Serial.print(commsData.throttle_raw);
+    Serial.print("/1000 (");
+    Serial.print((commsData.throttle_raw / 10.0), 1);
+    Serial.println("%)");
+    if (commsData.throttle_status != 0) {
+      Serial.print("  Status: 0x");
+      Serial.println(commsData.throttle_status, HEX);
+    }
+    
+    // BEM Board (0x500)
+    Serial.println("\n[BATTERY ENTRY MODULE - 0x500]");
+    Serial.println("  (No telemetry data defined yet)");
+    
+    Serial.println("\n================================================");
+    Serial.println();
+  }
+}

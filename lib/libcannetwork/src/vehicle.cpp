@@ -1,0 +1,179 @@
+#include "vehicle.hpp"
+#include <stdint.h>
+
+#if defined(ARDUINO_ARCH_ESP32)
+#include "driver/twai.h"
+#include "esp_err.h"
+#elif defined(CORE_TEENSY)
+#include <FlexCAN_T4.h>
+#else
+#error "CAN network library note written for chosen architecture"
+#endif // defined
+
+Vehicle g_vehicle;
+
+#if defined(CORE_TEENSY)
+static FlexCAN_T4<CAN3> s_teensy_can;
+#endif
+
+#if defined(ARDUINO_ARCH_ESP32)
+void Vehicle::init_network(DevBoard board) {
+  m_board = board;
+  // TODO: TWAI driver
+}
+
+void Vehicle::send_message(uint32_t id, uint8_t len, const uint8_t *data) {
+  // TODO: implement TWAI transmit once message definitions are known
+}
+
+void Vehicle::twai_receive_task(void *arg) {
+  Vehicle *self = static_cast<Vehicle *>(arg);
+  twai_message_t message;
+  while (true) {
+    if (twai_receive(&message, portMAX_DELAY) == ESP_OK) {
+      self->on_receive(message.identifier, message.data_length_code,
+                       message.data);
+    }
+  }
+}
+#endif // defined(ARDUINO_ARCH_ESP32)
+
+#if defined(CORE_TEENSY)
+void Vehicle::forward_flexcan(const CAN_message_t &msg) {
+  g_vehicle.on_receive(msg.id, msg.len, msg.buf);
+}
+
+void Vehicle::init_network(DevBoard board) {
+  m_board = board;
+  s_teensy_can.begin();
+  s_teensy_can.setBaudRate(500000);
+  s_teensy_can.enableFIFO(true);
+  s_teensy_can.onReceive(forward_flexcan);
+}
+
+void Vehicle::send_message(uint32_t id, uint8_t len, const uint8_t *data) {
+  // TODO: align with ESP32 implementation once message layout exists
+}
+#endif // defined(CORE_TEENSY)
+
+void Vehicle::send_all() {
+  // TODO:
+  // construct a stack array of bytes for each message being sent
+  // send_message() for the ID and data necessary
+  // repeat for all messages defined for this board
+  switch (m_board) {
+  case PERIPHERALS:
+    uint8_t data[8];
+    data[0] = g_vehicle.m_peripherals_windshield;
+    data[1] = g_vehicle.m_peripherals_backrunninglights;
+    data[2] = g_vehicle.m_peripherals_turn;
+    data[3] = g_vehicle.m_peripherals_headlights;
+    data[4] = g_vehicle.m_peripherals_brakelights;
+    data[5] = g_vehicle.m_peripherals_hazard;
+
+    g_vehicle.send_message(0x100, 8, data);
+    break;
+  
+  case POWER_DISTRIBUTION:
+    uint8_t data[8];
+    data[0] = (g_vehicle.m_pdb_current >> 8) & 0xFF;
+    data[1] = g_vehicle.m_pdb_current & 0xFF;
+    data[2] = (g_vehicle.m_pdb_voltage >> 8) & 0xFF;
+    data[3] = g_vehicle.m_pdb_voltage & 0xFF;
+    
+    g_vehicle.send_message(0x200, 8, data);
+    break;
+
+  case MOTOR_CONTROLLER:
+    uint8_t data[8];
+
+    data[0] = (g_vehicle.m_motor_rpm >> 24) & 0xFF;
+    data[1] = (g_vehicle.m_motor_rpm >> 16) & 0xFF;
+    data[2] = (g_vehicle.m_motor_rpm >> 8) & 0xFF;
+    data[3] = g_vehicle.m_motor_rpm & 0xFF;
+
+    g_vehicle.send_message(0x300, 8, data);
+    break;
+    
+  case THROTTLE:
+    uint8_t data;
+
+    data[0] = (g_vehicle.m_throttle_percentage >> 8) & 0xFF;
+    data[1] = g_vehicle.m_throttle_percentage & 0xFF;
+
+    g_vehicle.send_message(0x400, 8, data);
+    break;
+    
+  case JOULEMETER:
+    uint8_t data[8];
+    data[0] = (g_vehicle.m_joulemeter_current >> 8) & 0xFF;
+    data[1] = g_vehicle.m_joulemeter_current & 0xFF;
+    data[2] = (g_vehicle.m_joulemeter_voltage >> 8) & 0xFF;
+    data[3] = g_vehicle.m_joulemeter_voltage & 0xFF;
+    data[4] = (g_vehicle.m_joulemeter_energy >> 24) & 0xFF;
+    data[5] = (g_vehicle.m_joulemeter_energy >> 16) & 0xFF;
+    data[6] = (g_vehicle.m_joulemeter_energy >> 8) & 0xFF;
+    data[7] = g_vehicle.m_joulemeter_energy & 0xFF;
+    
+    g_vehicle.send_message(0x500, 8, data);
+    break;
+
+  case COMMUNICATIONS:
+    // TODO:
+    // construct a stack array of bytes for the message being sent
+    // send_message() for the ID and data necessary
+    // repeat for all messages defined for this board
+    break;
+    
+  default:
+    // should never reach here
+    break;
+  }
+}
+
+void Vehicle::on_receive(uint32_t id, uint8_t len, const uint8_t *data) {
+  switch (id) {
+  case 0x100:
+    g_vehicle.m_peripherals_windshield = data[0];
+    g_vehicle.m_peripherals_backrunninglights = data[1];
+    g_vehicle.m_peripherals_turn = data[2];
+    g_vehicle.m_peripherals_headlights = data[3];
+    g_vehicle.m_peripherals_brakelights = data[4];
+    g_vehicle.m_peripherals_hazard = data[5];
+    break;
+  case 0x101:
+    // Contains software versions, not useful
+    break;
+  case 0x200:
+    g_vehicle.m_pdb_current = (data[0] << 8) | data[1];
+    g_vehicle.m_pdb_voltage = (data[2] << 8) | data[3];
+    break;
+  case 0x201:
+    // Contains software versions, not useful
+    break;
+  case 0x300:
+    g_vehicle.m_motor_rpm = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | (data[3]);
+    break;
+  case 0x301:
+    // Contains software versions, not useful
+    break;
+  case 0x400:
+    g_vehicle.m_throttle_percentage = (data[0] << 8) | data[1];
+    break;
+  case 0x401:
+    // Contains software versions, not useful
+    break;
+  case 0x500:
+    g_vehicle.m_joulemeter_current = (data[0] << 8) | data[1];
+    g_vehicle.m_joulemeter_voltage = (data[2] << 8) | data[3];
+    g_vehicle.m_joulemeter_energy = (data[4] << 24) | (data[5] << 16) | (data[6] << 8) | (data[7]);
+  case 0x501:
+    // Contains software versions, not useful
+    break;
+  case 0x600:
+    // Contains software versions, not useful
+    break;
+  default:
+    break;
+  }
+}

@@ -1,0 +1,55 @@
+// thr_fake_send_debug.cpp
+#include <Arduino.h>
+#include "../../Comms/CAN Network/vehicle.hpp"
+#include "../../Comms/CAN Network/flexcan_adapter.hpp"
+#define THR_BOARD
+
+FlexCANAdapter canAdapter;
+
+static unsigned long lastSend = 0;
+static uint8_t seq = 0;
+
+static void blinkOnce() {
+  digitalWrite(LED_BUILTIN, HIGH);
+  delay(20);
+  digitalWrite(LED_BUILTIN, LOW);
+}
+
+void setup() {
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, LOW);
+
+  Serial.begin(115200);
+  delay(100);
+
+  Serial.println("THR FAKE SENDER DEBUG: throttle_raw=10 every 10s on 0x410");
+  vehicle::init(&canAdapter);
+  vehicle::setThrottleRaw(10);
+
+  Serial.println("If receiver is present+listening, CAN frames should be ACKed.");
+}
+
+void loop() {
+  const unsigned long now = millis();
+
+  canAdapter.events();
+  vehicle::processRxQueue();
+
+  if (now - lastSend >= 1000) {
+    lastSend = now;
+    seq++;
+
+    vehicle::setThrottleRaw(10);
+
+    bool ok = vehicle::sendThrottle(seq);
+    blinkOnce();
+
+    // This tells you "did my code call send successfully?"
+    // Not necessarily "ACKed", but it's still useful.
+    Serial.print("[TX] sendThrottle() returned ");
+    Serial.print(ok ? "true" : "false");
+    Serial.print(" | seq=");
+    Serial.println(seq);
+
+  }
+}
