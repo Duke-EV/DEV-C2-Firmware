@@ -134,21 +134,6 @@ void Vehicle::send_all() {
 void Vehicle::on_receive(uint32_t id, uint8_t len, const uint8_t *data) {
   switch (id) {
   case 0x100:
-    // TODO: parse the data to the member variables
-    // ex:
-    // m_motor_rpm = data[0] << 8 | data[1];
-    // NOTE: This may be more complicated than you'd expect depending on
-    // how the data was packed into the message. Balance out the efficiency
-    // of packing many signals into a message versus the simple inperpretation
-    // of the bytes themselves. This will be extra important for packing of 1
-    // bit signals like switches or unpacking multibyte signals like 12 bit
-    // temperature sensors. ENDIANNESS MATTERS! DO NOT ASSUME BYTES ARE PACKED
-    // AS EXPECTED BETWEEN ARCHITECUTURES BAD EXAMPLE:
-    // // sending side
-    // uint32_t my_motor_rpm = 2048
-    // send(0x100, 8, (char*)&my_motor_rpm); //EVIL
-    // //receiving side
-    // my_motor_rpm = *data; //UNKNOWN ENDIANNESS
     g_vehicle.m_peripherals_windshield = data[0];
     g_vehicle.m_peripherals_backrunninglights = data[1];
     g_vehicle.m_peripherals_turn = data[2];
@@ -156,20 +141,38 @@ void Vehicle::on_receive(uint32_t id, uint8_t len, const uint8_t *data) {
     g_vehicle.m_peripherals_brakelights = data[4];
     g_vehicle.m_peripherals_hazard = data[5];
     break;
+  case 0x101:
+    // Contains software versions, not useful
+    break;
   case 0x200:
     g_vehicle.m_pdb_current = (data[0] << 8) | data[1];
     g_vehicle.m_pdb_voltage = (data[2] << 8) | data[3];
     break;
+  case 0x201:
+    // Contains software versions, not useful
+    break;
   case 0x300:
     g_vehicle.m_motor_rpm = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | (data[3]);
     break;
+  case 0x301:
+    // Contains software versions, not useful
+    break;
   case 0x400:
     g_vehicle.m_throttle_percentage = (data[0] << 8) | data[1];
+    break;
+  case 0x401:
+    // Contains software versions, not useful
     break;
   case 0x500:
     g_vehicle.m_joulemeter_current = (data[0] << 8) | data[1];
     g_vehicle.m_joulemeter_voltage = (data[2] << 8) | data[3];
     g_vehicle.m_joulemeter_energy = (data[4] << 24) | (data[5] << 16) | (data[6] << 8) | (data[7]);
+  case 0x501:
+    // Contains software versions, not useful
+    break;
+  case 0x600:
+    // Contains software versions, not useful
+    break;
   default:
     break;
   }
