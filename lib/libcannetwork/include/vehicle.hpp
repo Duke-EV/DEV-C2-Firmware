@@ -75,12 +75,13 @@ private:
   // Private methods common between architectures
 private:
   void send_message(uint32_t id, uint8_t len, const uint8_t *data);
-  void send_all();
   void on_receive(uint32_t id, uint8_t len, const uint8_t *data);
 
   // Public entry point
 public:
   void init_network(DevBoard board);
+  void send_all();
+  void loop();
 };
 
 extern Vehicle g_vehicle;

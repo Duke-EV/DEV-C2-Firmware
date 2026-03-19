@@ -1,45 +1,43 @@
 #include <Arduino.h>
-#include <FlexCAN_T4.h>
+#include <vehicle.hpp>
 
-FlexCAN_T4<CAN3> Can3;
+IntervalTimer timer;
+unsigned long last_time = 0;
+int state = 0;
+
+void send_all_wrapper() {
+  g_vehicle.send_all();
+}
 
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, LOW);
+  digitalWrite(LED_BUILTIN, HIGH);
 
   Serial.begin(115200);
-  delay(200);
+  
+  g_vehicle.init_network(DevBoard::JOULEMETER);
 
-  Can3.begin();
-  Can3.setBaudRate(500000);
-
-  Serial.println("CAN RECEIVER");
+  timer.begin(send_all_wrapper, 100000);
 }
 
 void loop() {
-  Can3.events();
-
-  CAN_message_t msg;
-  if (Can3.read(msg)) {
-
-    //LED blinks
-    digitalWrite(LED_BUILTIN, HIGH);
-    delay(20);
-    digitalWrite(LED_BUILTIN, LOW);
-
-    //ID + LEN + DATA
-    Serial.print("[RX] ID=0x");
-    Serial.print(msg.id, HEX);
-    Serial.print(" LEN=");
-    Serial.print(msg.len);
-    Serial.print(" DATA=");
-
-    for (int i = 0; i < msg.len; i++) {
-      if (msg.buf[i] < 16) Serial.print("0");
-      Serial.print(msg.buf[i], HEX);
-      Serial.print(" ");
+  g_vehicle.loop();
+  if(millis() - last_time > 1000000) {
+    last_time = millis();
+    if(state == 0) {
+      state = 1;
+      g_vehicle.m_joulemeter_current = 0;
+      g_vehicle.m_joulemeter_energy = 0;
+      g_vehicle.m_joulemeter_voltage = 0;
     }
-
-    Serial.println();
+    else {
+      state = 0;
+      g_vehicle.m_joulemeter_current = 255;
+      g_vehicle.m_joulemeter_energy = 255;
+      g_vehicle.m_joulemeter_voltage = 255;
+    } 
   }
+
+  Serial.println("g_vehicle states");
+  Serial.println(g_vehicle.m_motor_rpm);
 }

@@ -2,7 +2,7 @@
 #include <stdint.h>
 
 #if defined(ARDUINO_ARCH_ESP32)
-#include "driver/twai.h"
+#include <ESP32-TWAI-CAN.hpp>
 #include "esp_err.h"
 #elif defined(CORE_TEENSY)
 #include <FlexCAN_T4.h>
@@ -13,7 +13,7 @@
 Vehicle g_vehicle;
 
 #if defined(CORE_TEENSY)
-static FlexCAN_T4<CAN3> s_teensy_can;
+static FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> s_teensy_can;
 #endif
 
 #if defined(ARDUINO_ARCH_ESP32)
@@ -36,6 +36,8 @@ void Vehicle::twai_receive_task(void *arg) {
     }
   }
 }
+
+void Vehicle::loop() {}
 #endif // defined(ARDUINO_ARCH_ESP32)
 
 #if defined(CORE_TEENSY)
@@ -53,6 +55,20 @@ void Vehicle::init_network(DevBoard board) {
 
 void Vehicle::send_message(uint32_t id, uint8_t len, const uint8_t *data) {
   // TODO: align with ESP32 implementation once message layout exists
+  CAN_message_t msg;
+  msg.id = id;
+  msg.len = len;
+  msg.flags.extended = 0;  // Use standard 11-bit IDs (set to 1 for 29-bit extended)
+  msg.flags.remote = 0;    // Not a remote frame
+  msg.seq = 0;             // Not using sequential mode
+
+  memcpy(msg.buf, data, len);
+
+  s_teensy_can.write(msg);
+}
+
+void Vehicle::loop() {
+  s_teensy_can.events();
 }
 #endif // defined(CORE_TEENSY)
 
@@ -61,9 +77,9 @@ void Vehicle::send_all() {
   // construct a stack array of bytes for each message being sent
   // send_message() for the ID and data necessary
   // repeat for all messages defined for this board
+  uint8_t data[8];
   switch (m_board) {
   case PERIPHERALS:
-    uint8_t data[8];
     data[0] = g_vehicle.m_peripherals_windshield;
     data[1] = g_vehicle.m_peripherals_backrunninglights;
     data[2] = g_vehicle.m_peripherals_turn;
@@ -75,7 +91,6 @@ void Vehicle::send_all() {
     break;
   
   case POWER_DISTRIBUTION:
-    uint8_t data[8];
     data[0] = (g_vehicle.m_pdb_current >> 8) & 0xFF;
     data[1] = g_vehicle.m_pdb_current & 0xFF;
     data[2] = (g_vehicle.m_pdb_voltage >> 8) & 0xFF;
@@ -85,8 +100,6 @@ void Vehicle::send_all() {
     break;
 
   case MOTOR_CONTROLLER:
-    uint8_t data[8];
-
     data[0] = (g_vehicle.m_motor_rpm >> 24) & 0xFF;
     data[1] = (g_vehicle.m_motor_rpm >> 16) & 0xFF;
     data[2] = (g_vehicle.m_motor_rpm >> 8) & 0xFF;
@@ -96,8 +109,6 @@ void Vehicle::send_all() {
     break;
     
   case THROTTLE:
-    uint8_t data;
-
     data[0] = (g_vehicle.m_throttle_percentage >> 8) & 0xFF;
     data[1] = g_vehicle.m_throttle_percentage & 0xFF;
 
@@ -105,7 +116,6 @@ void Vehicle::send_all() {
     break;
     
   case JOULEMETER:
-    uint8_t data[8];
     data[0] = (g_vehicle.m_joulemeter_current >> 8) & 0xFF;
     data[1] = g_vehicle.m_joulemeter_current & 0xFF;
     data[2] = (g_vehicle.m_joulemeter_voltage >> 8) & 0xFF;

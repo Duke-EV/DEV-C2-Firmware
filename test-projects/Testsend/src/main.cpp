@@ -1,45 +1,41 @@
 #include <Arduino.h>
-#include <FlexCAN_T4.h>
+#include <vehicle.hpp>
 
-// CAN3 on Teensy 4.1 (TX=22, RX=23)
-FlexCAN_T4<CAN3> Can3;
+IntervalTimer timer;
+unsigned long last_time = 0;
+int state = 0;
+
+void send_all_wrapper() {
+  g_vehicle.send_all();
+}
 
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, LOW);
+  digitalWrite(LED_BUILTIN, HIGH);
 
   Serial.begin(115200);
-  delay(200);
+  
+  g_vehicle.init_network(DevBoard::MOTOR_CONTROLLER);
 
-  Can3.begin();
-  Can3.setBaudRate(500000);
-
-  Serial.println("CAN sender running");
+  timer.begin(send_all_wrapper, 100000);
 }
 
 void loop() {
-  Can3.events();
+  g_vehicle.loop();
+  if(millis() - last_time > 1000) {
+    last_time = millis();
+    if(state == 0) {
+      state = 1;
+      g_vehicle.m_motor_rpm = 0;
+    }
+    else {
+      state = 0;
+      g_vehicle.m_motor_rpm = 255;
+    } 
+  }
 
-  CAN_message_t msg;
-  msg.id  = 0x100;
-  msg.len = 5;                 // length of "HELLO"
-
-  msg.buf[0] = 'H';
-  msg.buf[1] = 'E';
-  msg.buf[2] = 'L';
-  msg.buf[3] = 'L';
-  msg.buf[4] = 'O';
-
-  Can3.write(msg);
-
-  // Blink on send
-  digitalWrite(LED_BUILTIN, HIGH);
-  delay(50);
-  digitalWrite(LED_BUILTIN, LOW);
-
-  Serial.println("[TX] HELLO");
-  bool ok = Can3.write(msg);
-  Serial.println(ok ? "OK" : "FAIL");
-
-  delay(1000);
+  Serial.println("g_vehicle states");
+  Serial.println(g_vehicle.m_joulemeter_current);
+  Serial.println(g_vehicle.m_joulemeter_energy);
+  Serial.println(g_vehicle.m_joulemeter_voltage);
 }
