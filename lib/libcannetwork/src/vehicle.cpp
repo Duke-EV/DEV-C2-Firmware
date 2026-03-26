@@ -2,8 +2,7 @@
 #include <stdint.h>
 
 #if defined(ARDUINO_ARCH_ESP32)
-#include <ESP32-TWAI-CAN.hpp>
-#include "esp_err.h"
+#include "driver/twai.h"
 #elif defined(CORE_TEENSY)
 #include <FlexCAN_T4.h>
 #else
@@ -17,30 +16,57 @@ static FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> s_teensy_can;
 #endif
 
 #if defined(ARDUINO_ARCH_ESP32)
+static twai_node_handle_t node_hdl;
+#endif
+
+#if defined(ARDUINO_ARCH_ESP32)
 void Vehicle::init_network(DevBoard board) {
-  m_board = board;
-  ESP32Can.setPins(VEHICLE_TWAI_TX_PIN, VEHICLE_TWAI_RX_PIN);
-  ESP32Can.setSpeed(ESP32Can.convertSpeed(500));
-  if(ESP32Can.begin()) {
-    Serial.println("CAN bus started!");
-  } else {
-    Serial.println("CAN bus failed!");
-  }
+  twai_onchip_node_config_t node_config = {
+    .io_cfg.tx = VEHICLE_TWAI_TX_PIN,
+    .io_cfg.rx = VEHICLE_TWAI_RX_PIN,
+    .bit_timing.bitrate = 500000,
+    .tx_queue_depth = 5,
+  };
+
+  ESP_ERROR_CHECK(twai_new_node_onchip(&node_config, &node_hdl));
+  ESP_ERROR_CHECK(twai_node_enable(node_hdl));
+
+  twai_event_callbacks_t callback = {
+    .on_rx_done = Vehicle::twai_receive_task,
+  };
+  ESP_ERROR_CHECK(twai_node_register_event_callbacks(node_hdl, &callback, NULL));
 }
 
 void Vehicle::send_message(uint32_t id, uint8_t len, const uint8_t *data) {
-  CanFrame frame = {0};
-  frame.identifier = id;
-  frame.extd = 0;
-  frame.data_length_code = len;
-  for(int i = 0; i < len; i++) {
-    frame[i] = data[i];
-  }
-  ESP32Can.writeFrame(frame);
+  twai_frame_t tx_msg = {
+    .header.id = 0x1,           // Message ID
+    .header.ide = true,         // Use 29-bit extended ID format
+    .buffer = send_buff,        // Pointer to data to transmit
+    .buffer_len = sizeof(send_buff),  // Length of data to transmit
+  };
+
+  ESP_ERROR_CHECK(twai_node_transmit(node_hdl, &tx_msg, 0));
+  ESP_ERROR_CHECK(twai_node_transmit_wait_all_done(node_hdl, -1));
 }
 
-void Vehicle::twai_receive_task(void *arg) {
-  
+bool Vehicle::twai_receive_task(twai_node_handle_t handle, const twai_rx_done_event_data_t *edata, void *user_ctx) {
+  uint8_t recv_buff[8];
+  twai_frame_t rx_frame = {
+    .buffer = recv_buff,
+    .buffer_len = sizeof(recv_buff),
+  };
+  if (ESP_OK == twai_node_receive_from_isr(handle, &rx_frame)) {
+    uint32_t id = rx_frame.id;
+    uint8_t dlc = rx_frame.dlc;
+    uint8_t data[8];
+
+    for(int i = 0; i < dlc; i++) {
+      data[i] = recv_buff[i];
+    }
+
+    g_vehicle.on_receive(id, dlc, data);
+  }
+  return false;
 }
 #endif // defined(ARDUINO_ARCH_ESP32)
 

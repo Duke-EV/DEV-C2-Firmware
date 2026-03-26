@@ -3,9 +3,6 @@
 
 #if defined(ARDUINO_ARCH_ESP32)
 #include "driver/twai.h"
-#include "driver/gpio.h"
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
 #ifndef VEHICLE_TWAI_TX_PIN
 #define VEHICLE_TWAI_TX_PIN GPIO_NUM_5
 #endif
@@ -34,10 +31,7 @@ private:
   DevBoard m_board;
 
 #if defined(ARDUINO_ARCH_ESP32)
-  twai_general_config_t m_twai_general;
-  twai_timing_config_t m_twai_timing;
-  twai_filter_config_t m_twai_filter;
-  TaskHandle_t m_twai_receive_task;
+
 #elif defined(CORE_TEENSY)
   // Teensy uses the shared static instance in the source file.
 #else
@@ -65,7 +59,7 @@ public:
   // Private methods unique to architecture for sending/receiving can messages
 private:
 #if defined(ARDUINO_ARCH_ESP32)
-  static void twai_receive_task(void *arg);
+  static bool twai_receive_task(twai_node_handle_t handle, const twai_rx_done_event_data_t *edata, void *user_ctx);
 #elif defined(CORE_TEENSY)
   static void forward_flexcan(const CAN_message_t &msg);
 #else
