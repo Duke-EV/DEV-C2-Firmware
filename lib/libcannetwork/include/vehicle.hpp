@@ -81,7 +81,6 @@ private:
 public:
   void init_network(DevBoard board);
   void send_all();
-  void loop();
 };
 
 extern Vehicle g_vehicle;

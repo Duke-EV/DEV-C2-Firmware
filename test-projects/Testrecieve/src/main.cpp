@@ -21,9 +21,9 @@ void setup() {
 }
 
 void loop() {
-  g_vehicle.loop();
-  if(millis() - last_time > 1000000) {
-    last_time = millis();
+  unsigned long now = millis();
+  if(now - last_time > 1000) {
+    last_time = now;
     if(state == 0) {
       state = 1;
       g_vehicle.m_joulemeter_current = 0;
@@ -35,7 +35,8 @@ void loop() {
       g_vehicle.m_joulemeter_current = 255;
       g_vehicle.m_joulemeter_energy = 255;
       g_vehicle.m_joulemeter_voltage = 255;
-    } 
+    }
+    //Serial.println("Updating Data!!");
   }
 
   Serial.println("g_vehicle states");

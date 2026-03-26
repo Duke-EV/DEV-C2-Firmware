@@ -19,25 +19,29 @@ static FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> s_teensy_can;
 #if defined(ARDUINO_ARCH_ESP32)
 void Vehicle::init_network(DevBoard board) {
   m_board = board;
-  // TODO: TWAI driver
-}
-
-void Vehicle::send_message(uint32_t id, uint8_t len, const uint8_t *data) {
-  // TODO: implement TWAI transmit once message definitions are known
-}
-
-void Vehicle::twai_receive_task(void *arg) {
-  Vehicle *self = static_cast<Vehicle *>(arg);
-  twai_message_t message;
-  while (true) {
-    if (twai_receive(&message, portMAX_DELAY) == ESP_OK) {
-      self->on_receive(message.identifier, message.data_length_code,
-                       message.data);
-    }
+  ESP32Can.setPins(VEHICLE_TWAI_TX_PIN, VEHICLE_TWAI_RX_PIN);
+  ESP32Can.setSpeed(ESP32Can.convertSpeed(500));
+  if(ESP32Can.begin()) {
+    Serial.println("CAN bus started!");
+  } else {
+    Serial.println("CAN bus failed!");
   }
 }
 
-void Vehicle::loop() {}
+void Vehicle::send_message(uint32_t id, uint8_t len, const uint8_t *data) {
+  CanFrame frame = {0};
+  frame.identifier = id;
+  frame.extd = 0;
+  frame.data_length_code = len;
+  for(int i = 0; i < len; i++) {
+    frame[i] = data[i];
+  }
+  ESP32Can.writeFrame(frame);
+}
+
+void Vehicle::twai_receive_task(void *arg) {
+  
+}
 #endif // defined(ARDUINO_ARCH_ESP32)
 
 #if defined(CORE_TEENSY)
@@ -50,6 +54,7 @@ void Vehicle::init_network(DevBoard board) {
   s_teensy_can.begin();
   s_teensy_can.setBaudRate(500000);
   s_teensy_can.enableFIFO(true);
+  s_teensy_can.enableFIFOInterrupt();
   s_teensy_can.onReceive(forward_flexcan);
 }
 
@@ -65,10 +70,6 @@ void Vehicle::send_message(uint32_t id, uint8_t len, const uint8_t *data) {
   memcpy(msg.buf, data, len);
 
   s_teensy_can.write(msg);
-}
-
-void Vehicle::loop() {
-  s_teensy_can.events();
 }
 #endif // defined(CORE_TEENSY)
 

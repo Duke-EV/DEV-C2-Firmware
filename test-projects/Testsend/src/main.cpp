@@ -21,7 +21,7 @@ void setup() {
 }
 
 void loop() {
-  g_vehicle.loop();
+  //g_vehicle.loop();
   if(millis() - last_time > 1000) {
     last_time = millis();
     if(state == 0) {
