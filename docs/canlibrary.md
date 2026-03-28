@@ -1,7 +1,14 @@
 # Unified CAN Library
 
 ## Installation
-In `./boards/YOUR_BOARD_HERE`, put ../../lib/libcannetwork in the library dependencies. Then, the library is installed. If the library is updated, you will need to update it in your individual project too.
+In `./boards/YOUR_BOARD_HERE`, put the following lines in the `platform.ini`:
+
+```
+lib_extra_dirs = ../../lib/
+lib_deps = libcannetwork
+``` 
+
+Then, the library is installed. If the library is updated, you will need to update it in your individual project too.
 
 ## Usage
 
@@ -68,3 +75,5 @@ Then in `setup()`, include the following lines:
 g_vehicle.init_network(DevBoard::**YOUR_BOARD_HERE**);
 timer.begin(send_all_wrapper, 100000); // Send on a 100 ms timer. Update if needed.
 ```
+
+## CAN Testing

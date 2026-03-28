@@ -6,6 +6,11 @@
   "platforms": ["espressif32","teensy"],
   "dependencies": [
     {
+      "name":"ESP32-TWAI-CAN",
+      "source":"https://github.com/handmade0octopus/ESP32-TWAI-CAN",
+      "platforms":["espressif32"]
+    },
+    {
       "name":"FlexCAN_T4",
       "source":"https://github.com/tonton81/FlexCAN_T4",
       "platforms": ["teensy"]
