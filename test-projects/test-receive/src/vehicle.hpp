@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <cstdint>
 
 #if defined(ARDUINO_ARCH_ESP32)
 #include <ESP32-TWAI-CAN.hpp>
@@ -84,3 +85,15 @@ public:
 };
 
 extern Vehicle g_vehicle;
+
+struct CANMessage {
+    uint32_t id;
+    uint8_t  len;
+    uint8_t  buf[8];
+};
+
+const uint8_t CAN_QUEUE_SIZE = 32;
+
+extern volatile uint8_t g_can_queue_head;
+extern volatile uint8_t g_can_queue_tail;
+extern CANMessage        g_can_queue[CAN_QUEUE_SIZE];

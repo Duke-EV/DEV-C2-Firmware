@@ -13,7 +13,7 @@ void setup() {
   delay(1000);
   Serial.println("Starting");
   
-  g_vehicle.init_network(DevBoard::JOULEMETER);
+  g_vehicle.init_network(DevBoard::THROTTLE);
   g_vehicle.m_joulemeter_voltage = 100;
   xTaskCreate(send_all, "Sending", 4096, nullptr, 5, nullptr);
 }
@@ -23,7 +23,8 @@ void loop() {
   unsigned long now =millis();
   if (now - last_time >= 1000) {
     last_time = millis();
-    g_vehicle.m_joulemeter_current += 1;
+    g_vehicle.m_throttle_average += 1;
+    g_vehicle.m_throttle_raw += 2;
   }
 
   Serial.println(g_vehicle.m_motor_rpm);

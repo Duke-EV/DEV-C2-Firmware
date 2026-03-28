@@ -10,9 +10,9 @@
 #endif // defined
 
 Vehicle g_vehicle;
-uint32_t g_recent_id;
-uint8_t g_recent_data[8];
-bool g_new_message;
+volatile uint8_t g_can_queue_head = 0;
+volatile uint8_t g_can_queue_tail = 0;
+CANMessage       g_can_queue[CAN_QUEUE_SIZE];
 
 #if defined(CORE_TEENSY)
 static FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> s_teensy_can;
@@ -75,9 +75,13 @@ bool Vehicle::twai_receive_task(twai_node_handle_t handle, const twai_rx_done_ev
 
 #if defined(CORE_TEENSY)
 void Vehicle::forward_flexcan(const CAN_message_t &msg) {
-  g_recent_id = msg.id;
-  memcpy(g_recent_data, msg.buf, msg.len);
-  g_new_message = true;
+  uint8_t next = (g_can_queue_tail + 1) % CAN_QUEUE_SIZE;
+  if (next != g_can_queue_head) {  // drop if full
+    g_can_queue[g_can_queue_tail].id  = msg.id;
+    g_can_queue[g_can_queue_tail].len = msg.len;
+    memcpy(g_can_queue[g_can_queue_tail].buf, msg.buf, msg.len);
+    g_can_queue_tail = next;
+  }
   g_vehicle.on_receive(msg.id, msg.len, msg.buf);
 }
 
