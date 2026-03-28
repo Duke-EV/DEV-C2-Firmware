@@ -52,7 +52,29 @@ uint32_t m_joulemeter_energy; // Accumulated energy in millijoules. Please note 
 **IMPORTANT**: You should update variables related to your board constantly. For example, if the throttle board updates its percentage, it should update the percentage variable. You should not modify variables in other boards, but you should access them for logic. Please adhere to the data types in the CAN library. Further implementation details are available [here](https://docs.google.com/spreadsheets/d/10I3f32omGpMJWg03m_2nzKF5BjdreAMC2nzWPjXydf4/edit?gid=1869009184#gid=1869009184).
 
 ### ESP32
-This is not yet tested for ESP32 boards.
+This library has been minimally tested for the ESP32. Note that the GPIO pins may be wrong depending on the ESP32 model. Be sure to include the vehicle header:
+
+```cpp
+#include <vehicle.hpp>
+```
+
+Then, add a wrapper for the task to send data.
+
+```cpp
+void send_all(void *args) {
+  while(true) {
+    g_vehicle.send_all();
+    vTaskDelay(pdMS_TO_TICKS(100));
+  } 
+}
+```
+
+Then, in `setup()`
+
+```cpp
+g_vehicle.init_network(DevBoard::**YOUR_BOARD_HERE**);
+xTaskCreate(send_all, "Sending", 4096, nullptr, 5, nullptr);
+```
 
 ### Teensy 4.1
 Once the library is written first include the vehicle header:
@@ -76,4 +98,23 @@ g_vehicle.init_network(DevBoard::**YOUR_BOARD_HERE**);
 timer.begin(send_all_wrapper, 100000); // Send on a 100 ms timer. Update if needed.
 ```
 
-## CAN Testing
+## CAN Monitoring
+There is a way to monitor the CAN messages going throughout the care. First, upload the PlatformIO project in `./test-projects/test-receive` to the CAN Test Board. Then, create a Python environment and activate it:
+
+```bash
+python -m venv .venv
+source ./venv/bin/activate
+``` 
+
+Then, navigate to `./test-projects/receive-gui` and install the requirements. Make sure your Python has TKinter installed with it. It likely is installed unless you are running linux. Then, install the appropriate package.
+
+```bash
+cd ./test-projects/receive-gui
+pip install -r requirements.txt
+```
+
+Then, to start the monitor
+
+```bash
+python vehicle_monitor.py
+```
