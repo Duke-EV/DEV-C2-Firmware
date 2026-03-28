@@ -142,8 +142,10 @@ void Vehicle::send_all() {
     break;
     
   case THROTTLE:
-    data[0] = (g_vehicle.m_throttle_percentage >> 8) & 0xFF;
-    data[1] = g_vehicle.m_throttle_percentage & 0xFF;
+    data[0] = (g_vehicle.m_throttle_raw >> 8) & 0xFF;
+    data[1] = g_vehicle.m_throttle_raw & 0xFF;
+    data[2] = (g_vehicle.m_throttle_average >> 8) & 0xFF;
+    data[3] = g_vehicle.m_throttle_average & 0xFF;
 
     g_vehicle.send_message(0x400, 8, data);
     break;

@@ -37,8 +37,8 @@ uint8_t m_peripherals_headlights; // 0 OR 1: off or on
 uint8_t m_peripherals_brakelights; // 0 OR 1: off or on
 uint8_t m_peripherals_hazard; // 0 OR 1: off or on
 
-uint16_t m_pdb_current; // Current in milliamps. Please note the variable type
-uint16_t m_pdb_voltage; // Voltage in millivolts. Please note the variable type
+uint16_t m_throttle_raw; // Raw ADC reading of throttle
+uint16_t m_throttle_average; // Averaged ADC reading over past epoch
 
 uint32_t m_motor_rpm; //RPM (Rotations per minute) of the motor, scaled as m_motor_rpm = 1000 * true_rpm
 
