@@ -118,8 +118,10 @@ void Vehicle::send_all() {
     break;
     
   case THROTTLE:
-    data[0] = (g_vehicle.m_throttle_percentage >> 8) & 0xFF;
-    data[1] = g_vehicle.m_throttle_percentage & 0xFF;
+    data[0] = (g_vehicle.m_throttle_raw >> 8) & 0xFF;
+    data[1] = g_vehicle.m_throttle_raw & 0xFF;
+    data[2] = (g_vehicle.m_throttle_average >> 8) & 0xFF;
+    data[3] = g_vehicle.m_throttle_average & 0xFF;
 
     g_vehicle.send_message(0x400, 8, data);
     break;
@@ -177,7 +179,8 @@ void Vehicle::on_receive(uint32_t id, uint8_t len, const uint8_t *data) {
     // Contains software versions, not useful
     break;
   case 0x400:
-    g_vehicle.m_throttle_percentage = (data[0] << 8) | data[1];
+    g_vehicle.m_throttle_raw = (data[0] << 8) | data[1];
+    g_vehicle.m_throttle_average = (data[2] << 8) | data[3];
     break;
   case 0x401:
     // Contains software versions, not useful

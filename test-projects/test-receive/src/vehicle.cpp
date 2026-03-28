@@ -201,7 +201,8 @@ void Vehicle::on_receive(uint32_t id, uint8_t len, const uint8_t *data) {
     // Contains software versions, not useful
     break;
   case 0x400:
-    g_vehicle.m_throttle_percentage = (data[0] << 8) | data[1];
+    g_vehicle.m_throttle_raw = (data[0] << 8) | data[1];
+    g_vehicle.m_throttle_average = (data[2] << 8) | data[3];
     break;
   case 0x401:
     // Contains software versions, not useful
@@ -210,6 +211,7 @@ void Vehicle::on_receive(uint32_t id, uint8_t len, const uint8_t *data) {
     g_vehicle.m_joulemeter_current = (data[0] << 8) | data[1];
     g_vehicle.m_joulemeter_voltage = (data[2] << 8) | data[3];
     g_vehicle.m_joulemeter_energy = (data[4] << 24) | (data[5] << 16) | (data[6] << 8) | (data[7]);
+    break;
   case 0x501:
     // Contains software versions, not useful
     break;

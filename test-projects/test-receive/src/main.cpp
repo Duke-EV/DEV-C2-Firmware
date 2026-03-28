@@ -20,7 +20,8 @@ void loop() {
   Serial.print(g_vehicle.m_pdb_current);                   Serial.print(",");
   Serial.print(g_vehicle.m_pdb_voltage);                   Serial.print(",");
   Serial.print(g_vehicle.m_motor_rpm);                     Serial.print(",");
-  Serial.print(g_vehicle.m_throttle_percentage);           Serial.print(",");
+  Serial.print(g_vehicle.m_throttle_raw);                  Serial.print(",");
+  Serial.print(g_vehicle.m_throttle_average);              Serial.print(",");
   Serial.print(g_vehicle.m_joulemeter_current);            Serial.print(",");
   Serial.print(g_vehicle.m_joulemeter_voltage);            Serial.print(",");
   Serial.print(g_vehicle.m_joulemeter_energy);

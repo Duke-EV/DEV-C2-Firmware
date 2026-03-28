@@ -53,7 +53,8 @@ public:
   
   uint32_t m_motor_rpm;
   
-  uint16_t m_throttle_percentage;
+  uint16_t m_throttle_raw;
+  uint16_t m_throttle_average;
   
   uint16_t m_joulemeter_current;
   uint16_t m_joulemeter_voltage;
