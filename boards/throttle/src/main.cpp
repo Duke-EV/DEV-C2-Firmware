@@ -1,6 +1,7 @@
 /**
- * benjamin wang
- * written to send signal from throttle board to the actual motor to control the motor.
+ * this board sends:
+ * raw signal (from 0 to something at some value less than 1024, approx at 1024*3/3.3)
+ * scaled moving average in unit_8 range, can modify window size in WINDOW_SIZE
  */
 
 #include <Arduino.h>
