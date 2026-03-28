@@ -15,8 +15,6 @@ const int SIGNALIN = 24; // signal in (from 0 to ~4.8*(3/5)=2.88v)
  * the 4.8 volts was measured with the multimeter
  * the 3/5 is from the voltage divider of (33k/(33k+22k))
  */
-const int TX_PIN = 31; // tx com bus pin
-const int RX_PIN = 30; // rx com bus pin
 
 const int DELAY_MS = 67;
 
@@ -78,9 +76,9 @@ void setup() {
 
   pinMode(ENABLE, INPUT);
   pinMode(SIGNALIN, INPUT);
-  pinMode(RX_PIN, INPUT);
-  pinMode(TX_PIN, OUTPUT);
   attachInterrupt(digitalPinToInterrupt(6), disableThrottleISR, RISING);
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, HIGH);
 
   Serial.begin(BAUD);
 }
@@ -88,6 +86,7 @@ void setup() {
 MovingAverage ma{WINDOW_SIZE};
 
 void loop() {
+
   if(disable_throttle) {
     //disable_throttle = false; --> WHEN TO RE-ENABLE THE THROTTLE SIGNAL?
     signal = 0;
@@ -117,12 +116,12 @@ void loop() {
 
   // put whatever we send into final_number.
   // int final_number = long_throttle_output;
-  g_vehicle.m_throttle_raw = signal; // raw throttle value
+  g_vehicle.m_throttle_raw = (uint16_t) signal; // raw throttle value
   if (scaled_throttle_output < smoothed_output) {
     smoothed_output = scaled_throttle_output;
   }
 
-  g_vehicle.m_throttle_average = smoothed_output; // moving average, scaled to unit_8 range
+  g_vehicle.m_throttle_average = (uint16_t) smoothed_output; // moving average, scaled to unit_8 range
   Serial.print("Averaged Throttle with brake correction: ");
   Serial.println(smoothed_output);
 }
