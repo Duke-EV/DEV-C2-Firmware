@@ -65,11 +65,11 @@ void readStates() {
 
   if(digitalRead(sHazard) == HIGH){
     hazard = true;
-    g_vehicle.m_peripherals_hazard == 1;
+    g_vehicle.m_peripherals_hazard = 1;
   }
   else {
     hazard = false;
-    g_vehicle.m_peripherals_hazard == 0;
+    g_vehicle.m_peripherals_hazard = 0;
   }
 
   if(digitalRead(sRunning) == HIGH){
@@ -112,4 +112,5 @@ void loop() {
   else {
     digitalWrite(HL, LOW);
   }
+  Serial.println(runningLights);
 }
