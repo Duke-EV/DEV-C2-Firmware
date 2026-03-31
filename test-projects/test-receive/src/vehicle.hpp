@@ -1,16 +1,10 @@
 #pragma once
 #include <stdint.h>
-#include <cstdint>
 
 #if defined(ARDUINO_ARCH_ESP32)
 #include <ESP32-TWAI-CAN.hpp>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#ifndef VEHICLE_TWAI_TX_PIN
-#define VEHICLE_TWAI_TX_PIN 25
-#endif
-#ifndef VEHICLE_TWAI_RX_PIN
-#define VEHICLE_TWAI_RX_PIN 35
 #endif
 #elif defined(CORE_TEENSY)
 #include <FlexCAN_T4.h>
@@ -25,8 +19,9 @@ enum DevBoard {
   POWER_DISTRIBUTION,
   THROTTLE,
   JOULEMETER,
+  TEST_BOARD,
   // Number of designs this library is using
-  BOARD_COUNT
+  BOARD_COUNT,
 };
 
 class Vehicle {
@@ -51,6 +46,7 @@ public:
 
   uint16_t m_pdb_current;
   uint16_t m_pdb_voltage;
+  uint8_t  m_pdb_motor_enabled;
   
   uint32_t m_motor_rpm;
   

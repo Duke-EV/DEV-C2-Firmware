@@ -12,6 +12,7 @@ void send_vehicle_states() {
   Serial.print(g_vehicle.m_peripherals_hazard);            Serial.print(",");
   Serial.print(g_vehicle.m_pdb_current);                   Serial.print(",");
   Serial.print(g_vehicle.m_pdb_voltage);                   Serial.print(",");
+  Serial.print(g_vehicle.m_pdb_motor_enabled);             Serial.print(",");
   Serial.print(g_vehicle.m_motor_rpm);                     Serial.print(",");
   Serial.print(g_vehicle.m_throttle_raw);                  Serial.print(",");
   Serial.print(g_vehicle.m_throttle_average);              Serial.print(",");
@@ -27,7 +28,7 @@ void setup() {
 
   Serial.begin(115200);
   
-  g_vehicle.init_network(DevBoard::JOULEMETER);
+  g_vehicle.init_network(DevBoard::TEST_BOARD);
   timer.begin(send_vehicle_states, 10000);
 }
 

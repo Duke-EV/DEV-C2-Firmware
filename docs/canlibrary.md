@@ -37,12 +37,14 @@ uint8_t m_peripherals_headlights; // 0 OR 1: off or on
 uint8_t m_peripherals_brakelights; // 0 OR 1: off or on
 uint8_t m_peripherals_hazard; // 0 OR 1: off or on
 
-uint16_t m_throttle_raw; // Raw ADC reading of throttle
-uint16_t m_throttle_average; // Averaged ADC reading over past epoch
+uint16_t m_pdb_current; // PDB Current, stored in milliamps
+uint16_t m_pdb_voltage; // PDB Voltage, stored in millivolts
+uint8_t  m_pdb_motor_enabled; // 0 or 1 (ESC enabled or not)
 
 uint32_t m_motor_rpm; //RPM (Rotations per minute) of the motor, scaled as m_motor_rpm = 1000 * true_rpm
 
-uint16_t m_throttle_percentage; // Percentage of throttle, scaled as m_throttle_percentage = 10 * true_percentage
+uint16_t m_throttle_raw; // Raw ADC reading of throttle
+uint16_t m_throttle_average; // Averaged ADC reading over past epoch
 
 uint16_t m_joulemeter_current; // Current in milliamps. Please note the variable type
 uint16_t m_joulemeter_voltage; // Voltage in millivolts. Please note the variable type

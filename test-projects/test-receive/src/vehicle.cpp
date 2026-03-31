@@ -2,7 +2,12 @@
 #include <stdint.h>
 
 #if defined(ARDUINO_ARCH_ESP32)
-#include "driver/twai.h"
+#include <ESP32-TWAI-CAN.hpp>
+#ifndef VEHICLE_TWAI_TX_PIN
+#define VEHICLE_TWAI_TX_PIN 25
+#endif
+#ifndef VEHICLE_TWAI_RX_PIN
+#define VEHICLE_TWAI_RX_PIN 35
 #elif defined(CORE_TEENSY)
 #include <FlexCAN_T4.h>
 #else
@@ -110,11 +115,9 @@ void Vehicle::send_message(uint32_t id, uint8_t len, const uint8_t *data) {
 #endif // defined(CORE_TEENSY)
 
 void Vehicle::send_all() {
-  // TODO:
-  // construct a stack array of bytes for each message being sent
-  // send_message() for the ID and data necessary
-  // repeat for all messages defined for this board
   uint8_t data[8];
+  uint8_t heartbeat[8];
+  heartbeat[0] = 1;
   switch (m_board) {
   case PERIPHERALS:
     data[0] = g_vehicle.m_peripherals_windshield;
@@ -125,6 +128,7 @@ void Vehicle::send_all() {
     data[5] = g_vehicle.m_peripherals_hazard;
 
     g_vehicle.send_message(0x100, 8, data);
+    g_vehicle.send_message(0x101, 8, heartbeat);
     break;
   
   case POWER_DISTRIBUTION:
@@ -132,8 +136,10 @@ void Vehicle::send_all() {
     data[1] = g_vehicle.m_pdb_current & 0xFF;
     data[2] = (g_vehicle.m_pdb_voltage >> 8) & 0xFF;
     data[3] = g_vehicle.m_pdb_voltage & 0xFF;
+    data[4] = g_vehicle.m_pdb_motor_enabled;
     
     g_vehicle.send_message(0x200, 8, data);
+    g_vehicle.send_message(0x201, 8, heartbeat);
     break;
 
   case MOTOR_CONTROLLER:
@@ -143,6 +149,7 @@ void Vehicle::send_all() {
     data[3] = g_vehicle.m_motor_rpm & 0xFF;
 
     g_vehicle.send_message(0x300, 8, data);
+    g_vehicle.send_message(0x301, 8, heartbeat);
     break;
     
   case THROTTLE:
@@ -152,6 +159,7 @@ void Vehicle::send_all() {
     data[3] = g_vehicle.m_throttle_average & 0xFF;
 
     g_vehicle.send_message(0x400, 8, data);
+    g_vehicle.send_message(0x401, 8, heartbeat);
     break;
     
   case JOULEMETER:
@@ -165,15 +173,17 @@ void Vehicle::send_all() {
     data[7] = g_vehicle.m_joulemeter_energy & 0xFF;
     
     g_vehicle.send_message(0x500, 8, data);
+    g_vehicle.send_message(0x501, 8, heartbeat);
     break;
 
   case COMMUNICATIONS:
-    // TODO:
-    // construct a stack array of bytes for the message being sent
-    // send_message() for the ID and data necessary
-    // repeat for all messages defined for this board
+    g_vehicle.send_message(0x600, 8, heartbeat);
     break;
-    
+
+  case TEST_BOARD:
+    g_vehicle.send_message(0x700, 8, heartbeat)
+    break;
+
   default:
     // should never reach here
     break;
@@ -196,6 +206,7 @@ void Vehicle::on_receive(uint32_t id, uint8_t len, const uint8_t *data) {
   case 0x200:
     g_vehicle.m_pdb_current = (data[0] << 8) | data[1];
     g_vehicle.m_pdb_voltage = (data[2] << 8) | data[3];
+    g_vehicle.m_pdb_motor_enabled = data[4];
     break;
   case 0x201:
     // Contains software versions, not useful

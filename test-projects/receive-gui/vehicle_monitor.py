@@ -16,6 +16,7 @@ FIELDS = [
     ("Hazard",              "m_peripherals_hazard",              "Peripherals"),
     ("PDB Current",         "m_pdb_current",                     "PDB"),
     ("PDB Voltage",         "m_pdb_voltage",                     "PDB"),
+    ("PDB Enabled Motor",   "m_pdb_motor_enabled",               "PDB"),
     ("Motor RPM",           "m_motor_rpm",                       "Motor"),
     ("Throttle Raw",        "m_throttle_raw",                    "Motor"),
     ("Throttle Average",    "m_throttle_average",                "Motor"),
