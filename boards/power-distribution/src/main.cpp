@@ -21,7 +21,12 @@ bool powerSystemOk = true;
 const int LED = 13;
 bool ledState = false;
 
+// relay pins
+const int relay1 = 29;
+const int relay2 = 28;
+
 elapsedMillis timer_ms;
+elapsedMillis precharge_timer_ms;
 
 
 void setup() {
@@ -43,6 +48,12 @@ void setup() {
 
   // LED 
   pinMode(LED, OUTPUT);
+
+  // relays pins
+  pinMode(relay1, OUTPUT);
+  pinMode(relay2, OUTPUT);
+  digitalWrite(relay1, LOW);
+  digitalWrite(relay2, HIGH);
   
   Serial.println("CAN bus initialized at 500 kbps");
   Serial.println("PDB ready - Power system OK");
@@ -70,5 +81,8 @@ void loop() {
     uint16_t vout_read_mV = (vout_read_raw * 3300) / 4095; // Convert to mV, with 3.3V reference and 12-bit ADC
     uint16_t vout_scaled_mV = (vout_read_mV/10) * 156; // Convert to mV, with reverse voltage divider (divider ratio is 15.666, but since no floats, divide vout_read_mV by 10 and multiply by 156 to get better result)
     g_vehicle.m_pdb_voltage = vout_scaled_mV;
+  }
+  if(precharge_timer_ms > 2000 && vout_scaled_mV > 45000) {
+    digitalWrite(relay1, HIGH);
   }
 }
