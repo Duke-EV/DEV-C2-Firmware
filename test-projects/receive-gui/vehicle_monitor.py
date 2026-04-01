@@ -16,6 +16,7 @@ FIELDS = [
     ("Hazard",              "m_peripherals_hazard",              "Peripherals"),
     ("PDB Current",         "m_pdb_current",                     "PDB"),
     ("PDB Voltage",         "m_pdb_voltage",                     "PDB"),
+    ("PDB Enabled Motor",   "m_pdb_motor_enabled",               "PDB"),
     ("Motor RPM",           "m_motor_rpm",                       "Motor"),
     ("Throttle Raw",        "m_throttle_raw",                    "Motor"),
     ("Throttle Average",    "m_throttle_average",                "Motor"),
@@ -247,44 +248,44 @@ class VehicleMonitor(tk.Tk):
         ts = time.strftime("%H:%M:%S")
 
         if id_str in self._can_rows:
+            # StringVar.set() is thread-safe — no need for after()
             r = self._can_rows[id_str]
             r["data"].set(data_str)
             r["count"].set(str(int(r["count"].get()) + 1))
             r["ts"].set(ts)
-            # brief highlight flash
-            r["frame"].config(highlightbackground=ACCENT)
-            self.after(150, lambda f=r["frame"]: f.config(highlightbackground=BORDER))
         else:
-            data_var  = tk.StringVar(value=data_str)
-            count_var = tk.StringVar(value="1")
-            ts_var    = tk.StringVar(value=ts)
+            # Widget creation must happen on main thread
+            self.after(0, self._create_can_row, id_str, data_str, ts)
+    
+    def _create_can_row(self, id_str: str, data_str: str, ts: str):
+        data_var  = tk.StringVar(value=data_str)
+        count_var = tk.StringVar(value="1")
+        ts_var    = tk.StringVar(value=ts)
 
-            row = tk.Frame(self._can_inner, bg=PANEL, pady=6, padx=12,
-                           highlightthickness=1, highlightbackground=ACCENT)
-            row.pack(fill="x", pady=2, padx=2)
+        row = tk.Frame(self._can_inner, bg=PANEL, pady=6, padx=12,
+                    highlightthickness=1, highlightbackground=BORDER)
+        row.pack(fill="x", pady=2, padx=2)
 
-            pill = tk.Frame(row, bg=ACCENT, width=4)
-            pill.pack(side="left", fill="y", padx=(0, 10))
-            pill.pack_propagate(False)
+        pill = tk.Frame(row, bg=ACCENT, width=4)
+        pill.pack(side="left", fill="y", padx=(0, 10))
+        pill.pack_propagate(False)
 
-            tk.Label(row, text=id_str, width=10, anchor="w",
-                     fg=ACCENT, bg=PANEL,
-                     font=("Courier New", 10, "bold")).pack(side="left")
-            tk.Label(row, textvariable=data_var, anchor="w",
-                     fg=TEXT, bg=PANEL,
-                     font=("Courier New", 10)).pack(side="left", padx=(8, 0), fill="x", expand=True)
-            tk.Label(row, textvariable=ts_var, width=10, anchor="e",
-                     fg=MUTED, bg=PANEL,
-                     font=("Courier New", 9)).pack(side="right", padx=(0, 8))
-            tk.Label(row, textvariable=count_var, width=6, anchor="e",
-                     fg=ACCENT2, bg=PANEL,
-                     font=("Courier New", 9, "bold")).pack(side="right")
+        tk.Label(row, text=id_str, width=10, anchor="w",
+                fg=ACCENT, bg=PANEL,
+                font=("Courier New", 10, "bold")).pack(side="left")
+        tk.Label(row, textvariable=data_var, anchor="w",
+                fg=TEXT, bg=PANEL,
+                font=("Courier New", 10)).pack(side="left", padx=(8, 0), fill="x", expand=True)
+        tk.Label(row, textvariable=ts_var, width=10, anchor="e",
+                fg=MUTED, bg=PANEL,
+                font=("Courier New", 9)).pack(side="right", padx=(0, 8))
+        tk.Label(row, textvariable=count_var, width=6, anchor="e",
+                fg=ACCENT2, bg=PANEL,
+                font=("Courier New", 9, "bold")).pack(side="right")
 
-            self._can_rows[id_str] = {
-                "frame": row, "data": data_var, "count": count_var, "ts": ts_var,
-            }
-            # fade pill after initial flash
-            self.after(400, lambda: pill.config(bg=MUTED))
+        self._can_rows[id_str] = {
+            "frame": row, "data": data_var, "count": count_var, "ts": ts_var,
+        }
 
     def _clear_can(self):
         for r in self._can_rows.values():
@@ -348,7 +349,7 @@ class VehicleMonitor(tk.Tk):
                 if m:
                     id_str   = m.group(1).upper()
                     data_str = m.group(2).strip().upper()
-                    self.after(0, self._upsert_can_row, id_str, data_str)
+                    self._upsert_can_row(id_str, data_str)  # no after()
                     continue
 
                 # Telemetry (comma-separated)?
