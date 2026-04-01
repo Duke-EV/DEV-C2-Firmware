@@ -63,7 +63,7 @@ void setup() {
   digitalWrite(relay2, HIGH);
 
   // motor enable signal off
-  g_vehicle.m_motor_enable = 0;
+  g_vehicle.m_pdb_motor_enabled = 0;
   
   Serial.println("CAN bus initialized at 500 kbps");
   Serial.println("PDB ready - Power system OK");
@@ -91,8 +91,8 @@ void loop() {
     digitalWrite(LED, HIGH);
     digitalWrite(relay1, HIGH);
     
-    if(!g_vehicle.m_motor_enable) {
-      g_vehicle.m_motor_enable = 1;
+    if(!g_vehicle.m_pdb_motor_enabled) {
+      g_vehicle.m_pdb_motor_enabled = 1;
     }
   }
 }
