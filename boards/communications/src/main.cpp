@@ -3,8 +3,7 @@
 #include <SD.h>
 #include <Ticker.h>
 
-#define BL 21 //brake light
-#define RL 22 //running light
+#define RL 22 //red light
 #define HL 16 //hazard left
 #define HR 17 //hazard right 
 
@@ -38,9 +37,7 @@ void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(HR, OUTPUT);
   pinMode(HL, OUTPUT);
-  pinMode(BL, OUTPUT);
   pinMode(RL, OUTPUT);
-
 
 }
 
@@ -80,7 +77,7 @@ void readStates() {
 
 
 void printState() {
-  delay(1000);
+  //delay(1000);
   Serial.print("Voltage: ");
   Serial.println(g_vehicle.m_pdb_voltage);
   Serial.print("Current: ");
@@ -98,11 +95,6 @@ void loop() {
   // TODO: rest of device
   readStates();
 
-  digitalWrite(HL, LOW);
-  digitalWrite(HR, LOW);
-  digitalWrite(BL, LOW);
-  digitalWrite(RL, LOW);
-
   if(hazard || leftTurn){
     digitalWrite(HL, HIGH);
   }
@@ -111,15 +103,14 @@ void loop() {
     digitalWrite(HR, HIGH);
   }
 
-  if(backrunningLights && !brakeLights) {
-    digitalWrite(RL, HIGH);
+  if(backrunningLights) {
+    analogWrite(RL,50);
   } 
 
-  if(brakeLights && !backrunningLights) {
-    digitalWrite(BL, HIGH);
+  if(brakeLights) {
+    analogWrite(RL, 255);
   } 
 
   printState();
 
-  delay(1);
 }
