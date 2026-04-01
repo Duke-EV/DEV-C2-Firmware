@@ -54,12 +54,16 @@ void setup() {
 
   // LED 
   pinMode(LED, OUTPUT);
+  digitalWrite(LED, LOW);
 
   // relays pins
   pinMode(relay1, OUTPUT);
   pinMode(relay2, OUTPUT);
   digitalWrite(relay1, LOW);
   digitalWrite(relay2, HIGH);
+
+  // motor enable signal off
+  g_vehicle.m_motor_enable = 0;
   
   Serial.println("CAN bus initialized at 500 kbps");
   Serial.println("PDB ready - Power system OK");
@@ -67,14 +71,7 @@ void setup() {
 }
 
 void loop() {
-  if(timer_ms > 500) { // Toggle LED every 500 ms
-    ledState = !ledState;
-    digitalWrite(LED, ledState);
-    timer_ms = 0; // reset timer
-  }
-
   if(timer_ms > 100) {
-    
     // current sensor read
     int current_read_raw = analogRead(A9);
     current_read_mV = (current_read_raw * 3300) / 4095; // Convert to mA, with 3.3V reference and 12-bit ADC
@@ -87,8 +84,17 @@ void loop() {
     vout_read_mV = (vout_read_raw * 3300) / 4095; // Convert to mV, with 3.3V reference and 12-bit ADC
     vout_scaled_mV = (vout_read_mV/10) * 156; // Convert to mV, with reverse voltage divider (divider ratio is 15.666, but since no floats, divide vout_read_mV by 10 and multiply by 156 to get better result)
     g_vehicle.m_pdb_voltage = vout_scaled_mV;
+
+    timer_ms = 0; // reset timer
   }
   if(precharge_timer_ms > 2000 && vout_scaled_mV > 45000) {
+    digitalWrite(LED, HIGH);
     digitalWrite(relay1, HIGH);
+    
+    if(!g_vehicle.m_motor_enable) {
+      g_vehicle.m_motor_enable = 1;
+    }
   }
 }
+
+//m_motor_enable
