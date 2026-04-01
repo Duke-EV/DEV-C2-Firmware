@@ -5,7 +5,6 @@
 #include <ESP32-TWAI-CAN.hpp>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#endif
 #elif defined(CORE_TEENSY)
 #include <FlexCAN_T4.h>
 #else
