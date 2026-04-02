@@ -93,6 +93,8 @@ void loop() {
     
     if(!g_vehicle.m_pdb_motor_enabled) {
       g_vehicle.m_pdb_motor_enabled = 1;
+    } else {
+      g_vehicle.m_pdb_motor_enabled = 0;
     }
   }
 }
