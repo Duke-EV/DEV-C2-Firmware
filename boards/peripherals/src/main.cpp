@@ -1,11 +1,13 @@
 #include <Arduino.h>
 #include <vehicle.hpp>
+#include <queue>
+#include <vector>
 
 #define Windshield 33 //D33: windshield wipers
 #define HL 34         //D34: headlights
 #define FLH 14        //A0:  front left hazard
 #define FRH 41        //A17: front right hazard
-//#define Horn NULL     //powered by BEM
+//#define Horn NULL   //powered by BEM
 
 #define sTurnLeft 3   //D3: left turn switch
 #define sTurnRight 4  //D4: right turn switch
@@ -14,6 +16,16 @@
 #define sHorn 7       //D7: horn switch
 #define sHazard 8     //D8: hazard light switch
 //#define sWindshield NULL //built in
+
+const int TRIG_PIN = 17;
+const int ECHO_PIN = 19;
+
+// Anything over 400 cm (23200 us pulse) is "out of range"
+const unsigned int MAX_DIST = 400;
+
+std::deque<float> distances;
+float median;
+float brake_dist = 8;
 
 IntervalTimer timer;
 void send_all_wrapper() {
@@ -42,6 +54,45 @@ void setup() {
 
   g_vehicle.init_network(DevBoard::PERIPHERALS);
   timer.begin(send_all_wrapper, 100000);
+
+  // The Trigger pin will tell the sensor to range find
+  pinMode(TRIG_PIN, OUTPUT);
+  digitalWrite(TRIG_PIN, LOW);
+
+  //Set Echo pin as input to measure the duration of 
+  //pulses coming back from the distance sensor
+  pinMode(ECHO_PIN, INPUT);
+
+  // We'll use the serial monitor to view the sensor output
+  Serial.begin(9600);
+}
+
+float measure_distance() {
+  unsigned long t1;
+  unsigned long t2;
+  unsigned long pulse_width;
+  float cm;
+
+  // Hold the trigger pin high for at least 10 us
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+
+  // Wait for pulse on echo pin
+  while (digitalRead(ECHO_PIN) == 0);
+
+  // Measure how long the echo pin was held high (pulse width)
+  // Note: the micros() counter will overflow after ~70 min
+  t1 = micros();
+  while (digitalRead(ECHO_PIN) == 1);
+  t2 = micros();
+  pulse_width = t2 - t1;
+
+  // Calculate distance in centimeters. Calculated from the
+  // assumed speed of sound in air at sea level (~340 m/s).
+  cm = pulse_width / 58.0;
+
+  return cm;
 }
 
 void readStates() {
@@ -59,8 +110,18 @@ void readStates() {
     g_vehicle.m_peripherals_backrunninglights = 0;
     g_vehicle.m_peripherals_headlights = 0;
   }
+  
+  float cm = measure_distance();
+  if(distances.size() >= 10){
+    distances.pop_front();
+  }
+  distances.push_back(cm);
+  std::deque<float> sorted_distances(distances);
+  std::sort(sorted_distances.begin(), sorted_distances.end());
+  median = sorted_distances[sorted_distances.size() / 2];
 
-  g_vehicle.m_peripherals_brakelights = digitalRead(sBrakes == HIGH);
+  Serial.println(median);
+  g_vehicle.m_peripherals_brakelights = median < brake_dist;
 }
 
 void loop() {
@@ -97,5 +158,7 @@ void loop() {
   else {
     digitalWrite(HL, LOW);
   }
-  Serial.println(runningLights);
+
+  // Wait at least 60ms before next measurement
+  delay(60);
 }
