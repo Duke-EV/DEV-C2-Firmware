@@ -1,3 +1,6 @@
+#define VEHICLE_TWAI_RX_PIN 34
+#define VEHICLE_TWAI_TX_PIN 33
+
 #include <Arduino.h>
 #include <vehicle.hpp>
 #include <SD.h>
