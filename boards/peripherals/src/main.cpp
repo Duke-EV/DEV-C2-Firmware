@@ -45,32 +45,9 @@ void setup() {
 }
 
 void readStates() {
-  if(digitalRead(sTurnLeft) == HIGH){                             
-    leftTurn = true;
-    g_vehicle.m_peripherals_turn = 1;
-  }
-  else {
-    leftTurn = false;
-  }
-
-  if(digitalRead(sTurnRight) == HIGH){    
-    rightTurn = true;
-    g_vehicle.m_peripherals_turn = 2;
-  }
-  else {
-    rightTurn = false;
-  }
-
-  if(!leftTurn && !rightTurn) g_vehicle.m_peripherals_turn = 0;
-
-  if(digitalRead(sHazard) == HIGH){
-    hazard = true;
-    g_vehicle.m_peripherals_hazard = 1;
-  }
-  else {
-    hazard = false;
-    g_vehicle.m_peripherals_hazard = 0;
-  }
+  leftTurn = digitalRead(sTurnLeft) == HIGH;
+  rightTurn = digitalRead(sTurnRight) == HIGH;
+  hazard = digitalRead(sHazard) == HIGH;
 
   if(digitalRead(sRunning) == HIGH){
     runningLights = true;
@@ -93,17 +70,25 @@ void loop() {
     if(hazard){
       digitalWrite(FLH, HIGH);
       digitalWrite(FRH, HIGH);
+      g_vehicle.m_peripherals_hazard = 1;
+      g_vehicle.m_peripherals_turn = 0;
     }
     else if(leftTurn){
       digitalWrite(FLH, HIGH);
+      g_vehicle.m_peripherals_hazard = 0;
+      g_vehicle.m_peripherals_turn = 1;
     }
     else if(rightTurn) {
       digitalWrite(FRH, HIGH);
+      g_vehicle.m_peripherals_hazard = 0;
+      g_vehicle.m_peripherals_turn = 2;
     }
   }
   else {
     digitalWrite(FLH, LOW);
     digitalWrite(FRH, LOW);
+    g_vehicle.m_peripherals_hazard = 0;
+     g_vehicle.m_peripherals_turn = 0;
   }
 
   if(runningLights){
