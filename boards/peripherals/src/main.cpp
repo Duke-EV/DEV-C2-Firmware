@@ -1,10 +1,11 @@
 #include <Arduino.h>
+#include <vehicle.hpp>
 
 #define Windshield 33 //D33: windshield wipers
 #define HL 34         //D34: headlights
 #define FLH 14        //A0:  front left hazard
 #define FRH 41        //A17: front right hazard
-//#define Horn NULL     //powered by BEM
+//#define Horn NULL   //powered by BEM
 
 #define sTurnLeft 3   //D3: left turn switch
 #define sTurnRight 4  //D4: right turn switch
@@ -14,9 +15,21 @@
 #define sHazard 8     //D8: hazard light switch
 //#define sWindshield NULL //built in
 
+const int TRIG_PIN = 17;
+const int ECHO_PIN = 19;
+
+// Anything over 400 cm (23200 us pulse) is "out of range"
+const unsigned int MAX_DIST = 400;
+
+IntervalTimer timer;
+void send_all_wrapper() {
+  g_vehicle.send_all();
+}
+
 bool hazard = false;
 bool leftTurn = false;
 bool rightTurn = false;
+bool runningLights = false;
 
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
@@ -32,11 +45,26 @@ void setup() {
   pinMode(sHorn, INPUT);
 
   digitalWrite(Windshield, HIGH); //windshield always has power.
+
+  g_vehicle.init_network(DevBoard::PERIPHERALS);
+  timer.begin(send_all_wrapper, 100000);
+
+  // The Trigger pin will tell the sensor to range find
+  pinMode(TRIG_PIN, OUTPUT);
+  digitalWrite(TRIG_PIN, LOW);
+
+  //Set Echo pin as input to measure the duration of 
+  //pulses coming back from the distance sensor
+  pinMode(ECHO_PIN, INPUT);
+
+  // We'll use the serial monitor to view the sensor output
+  Serial.begin(9600);
 }
 
-void loop() {
+void readStates() {
   if(digitalRead(sTurnLeft) == HIGH){                             
     leftTurn = true;
+    g_vehicle.m_peripherals_turn = 1;
   }
   else {
     leftTurn = false;
@@ -44,17 +72,39 @@ void loop() {
 
   if(digitalRead(sTurnRight) == HIGH){    
     rightTurn = true;
+    g_vehicle.m_peripherals_turn = 2;
   }
   else {
     rightTurn = false;
   }
 
+  if(!leftTurn && !rightTurn) g_vehicle.m_peripherals_turn = 0;
+
   if(digitalRead(sHazard) == HIGH){
     hazard = true;
+    g_vehicle.m_peripherals_hazard = 1;
   }
   else {
     hazard = false;
+    g_vehicle.m_peripherals_hazard = 0;
   }
+
+  if(digitalRead(sRunning) == HIGH){
+    runningLights = true;
+    g_vehicle.m_peripherals_backrunninglights = 1;
+    g_vehicle.m_peripherals_headlights = 1;
+  }
+  else {
+    runningLights = false;
+    g_vehicle.m_peripherals_backrunninglights = 0;
+    g_vehicle.m_peripherals_headlights = 0;
+  }
+
+  g_vehicle.m_peripherals_brakelights = digitalRead(sBrakes == HIGH);
+}
+
+void loop() {
+  readStates();  
 
   if(millis() % 2000 >= 1000) {
     if(hazard){
@@ -73,11 +123,51 @@ void loop() {
     digitalWrite(FRH, LOW);
   }
 
-  if(digitalRead(sRunning) == HIGH){
+  if(runningLights){
     digitalWrite(HL, HIGH);
   }
   else {
     digitalWrite(HL, LOW);
   }
+
+  float cm = measure_distance();
+  // Print out results
+  if (cm > MAX_DIST){
+    Serial.println("Out of range");
+  }
+  else {
+    Serial.print(cm);
+    Serial.println(" cm")
+  }
+
+  // Wait at least 60ms before next measurement
+  delay(60);
 }
 
+float measure_distance() {
+  unsigned long t1;
+  unsigned long t2;
+  unsigned long pulse_width;
+  float cm;
+
+  // Hold the trigger pin high for at least 10 us
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+
+  // Wait for pulse on echo pin
+  while (digitalRead(ECHO_PIN) == 0);
+
+  // Measure how long the echo pin was held high (pulse width)
+  // Note: the micros() counter will overflow after ~70 min
+  t1 = micros();
+  while (digitalRead(ECHO_PIN) == 1);
+  t2 = micros();
+  pulse_width = t2 - t1;
+
+  // Calculate distance in centimeters. Calculated from the
+  // assumed speed of sound in air at sea level (~340 m/s).
+  cm = pulse_width / 58.0;
+
+  return cm;
+}

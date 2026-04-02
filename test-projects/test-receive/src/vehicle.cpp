@@ -15,50 +15,78 @@
 #endif // defined
 
 Vehicle g_vehicle;
+volatile uint8_t g_can_queue_head = 0;
+volatile uint8_t g_can_queue_tail = 0;
+CANMessage       g_can_queue[CAN_QUEUE_SIZE];
 
 #if defined(CORE_TEENSY)
 static FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> s_teensy_can;
 #endif
 
 #if defined(ARDUINO_ARCH_ESP32)
-void Vehicle::init_network(DevBoard board) {
-  m_board = board;
-  ESP32Can.setPins(VEHICLE_TWAI_TX_PIN, VEHICLE_TWAI_RX_PIN);
-  ESP32Can.setTxQueueSize(10);
-  m_last_error = ESP32Can.begin(ESP32Can.convertSpeed(500)) ? ESP_OK : ESP_FAIL;
-  if (m_last_error != ESP_OK) {
-    return;
-  }
+static twai_node_handle_t node_hdl;
+#endif
 
-  xTaskCreate(Vehicle::twai_receive_task, "twai_rx", 4096, this, 5, nullptr);
+#if defined(ARDUINO_ARCH_ESP32)
+void Vehicle::init_network(DevBoard board) {
+  twai_onchip_node_config_t node_config = {
+    .io_cfg.tx = VEHICLE_TWAI_TX_PIN,
+    .io_cfg.rx = VEHICLE_TWAI_RX_PIN,
+    .bit_timing.bitrate = 500000,
+    .tx_queue_depth = 5,
+  };
+
+  ESP_ERROR_CHECK(twai_new_node_onchip(&node_config, &node_hdl));
+  ESP_ERROR_CHECK(twai_node_enable(node_hdl));
+
+  twai_event_callbacks_t callback = {
+    .on_rx_done = Vehicle::twai_receive_task,
+  };
+  ESP_ERROR_CHECK(twai_node_register_event_callbacks(node_hdl, &callback, NULL));
 }
 
 void Vehicle::send_message(uint32_t id, uint8_t len, const uint8_t *data) {
-  CanFrame frame = {0};
-  frame.identifier       = id;
-  frame.extd             = 0;
-  frame.data_length_code = len;
+  twai_frame_t tx_msg = {
+    .header.id = 0x1,           // Message ID
+    .header.ide = true,         // Use 29-bit extended ID format
+    .buffer = send_buff,        // Pointer to data to transmit
+    .buffer_len = sizeof(send_buff),  // Length of data to transmit
+  };
 
-  memcpy(frame.data, data, len);
-
-  bool ok = ESP32Can.writeFrame(frame);
+  ESP_ERROR_CHECK(twai_node_transmit(node_hdl, &tx_msg, 0));
+  ESP_ERROR_CHECK(twai_node_transmit_wait_all_done(node_hdl, -1));
 }
 
-void Vehicle::twai_receive_task(void *args) {
-  Vehicle *self = static_cast<Vehicle*>(args);
-  CanFrame frame;
-  while (true) {
-      if (ESP32Can.readFrame(frame, 100)) {
-          uint8_t data[8];
-          memcpy(data, frame.data, 8);
-          self->on_receive(frame.identifier, frame.data_length_code, data);
-      }
+bool Vehicle::twai_receive_task(twai_node_handle_t handle, const twai_rx_done_event_data_t *edata, void *user_ctx) {
+  uint8_t recv_buff[8];
+  twai_frame_t rx_frame = {
+    .buffer = recv_buff,
+    .buffer_len = sizeof(recv_buff),
+  };
+  if (ESP_OK == twai_node_receive_from_isr(handle, &rx_frame)) {
+    uint32_t id = rx_frame.id;
+    uint8_t dlc = rx_frame.dlc;
+    uint8_t data[8];
+
+    for(int i = 0; i < dlc; i++) {
+      data[i] = recv_buff[i];
+    }
+
+    g_vehicle.on_receive(id, dlc, data);
   }
+  return false;
 }
 #endif // defined(ARDUINO_ARCH_ESP32)
 
 #if defined(CORE_TEENSY)
 void Vehicle::forward_flexcan(const CAN_message_t &msg) {
+  uint8_t next = (g_can_queue_tail + 1) % CAN_QUEUE_SIZE;
+  if (next != g_can_queue_head) {  // drop if full
+    g_can_queue[g_can_queue_tail].id  = msg.id;
+    g_can_queue[g_can_queue_tail].len = msg.len;
+    memcpy(g_can_queue[g_can_queue_tail].buf, msg.buf, msg.len);
+    g_can_queue_tail = next;
+  }
   g_vehicle.on_receive(msg.id, msg.len, msg.buf);
 }
 
