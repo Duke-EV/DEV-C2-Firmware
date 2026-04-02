@@ -1,15 +1,30 @@
 #include <Arduino.h>
 #include <vehicle.hpp>
 #include <SD.h>
+#include <Ticker.h>
 
-#define BL 21 //brake light
-#define RL 22 //running light
+#include <WiFi.h>
+#include <WebServer.h>
+
+
+#define RL 22 //red light
 #define HL 16 //hazard left
 #define HR 17 //hazard right 
 
-IntervalTimer timer;
-void send_all_wrapper() {
-  g_vehicle.send_all();
+#ifndef LED_BUILTIN
+#define LED_BUILTIN 2
+#endif
+
+const char *ssid = "DukeOpen";
+const char *password = "";
+WebServer server(80);
+
+
+void send_all(void *args) {
+  while(true) {
+    g_vehicle.send_all();
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
 }
 
 bool hazard = false;
@@ -19,29 +34,130 @@ bool backrunningLights = false;
 bool brakeLights = false;
 
 
+bool sdReady = false;
+
+//void logVehicleState();
+
+
+void handleRoot() {
+  String html = R"rawhtml(
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Vehicle Dashboard</title>
+  <style>
+    body { font-family: monospace; background: #111; color: #0f0; padding: 20px; }
+    h1 { color: #fff; }
+    .card { background: #222; border: 1px solid #0f0; border-radius: 6px; padding: 16px; margin: 8px 0; }
+    .label { color: #aaa; font-size: 0.85em; }
+    .value { font-size: 1.5em; font-weight: bold; }
+    .on  { color: #0f0; }
+    .off { color: #555; }
+  </style>
+</head>
+<body>
+  <h1>Vehicle Dashboard</h1>
+  <div class="card"><span class="label">Voltage</span><br><span class="value" id="voltage">--</span> V</div>
+  <div class="card"><span class="label">Current</span><br><span class="value" id="current">--</span> A</div>
+  <div class="card"><span class="label">Motor RPM</span><br><span class="value" id="rpm">--</span></div>
+  <div class="card"><span class="label">Throttle Avg</span><br><span class="value" id="throttle_avg">--</span></div>
+  <div class="card"><span class="label">Throttle Raw</span><br><span class="value" id="throttle_raw">--</span></div>
+  <div class="card">
+    <span class="label">Lights</span><br>
+    <span id="brake">Brake</span> &nbsp;
+    <span id="backrun">Back Running</span> &nbsp;
+    <span id="hazard">Hazard</span> &nbsp;
+    <span id="left">Left Turn</span> &nbsp;
+    <span id="right">Right Turn</span>
+  </div>
+  <script>
+    function update() {
+      fetch('/data').then(r => r.json()).then(d => {
+        document.getElementById('voltage').textContent      = d.voltage;
+        document.getElementById('current').textContent      = d.current;
+        document.getElementById('rpm').textContent          = d.rpm;
+        document.getElementById('throttle_avg').textContent = d.throttle_avg;
+        document.getElementById('throttle_raw').textContent = d.throttle_raw;
+        ['brake','backrun','hazard','left','right'].forEach(k => {
+          const el = document.getElementById(k);
+          el.className = d[k] ? 'on' : 'off';
+        });
+      });
+    }
+    update();
+    setInterval(update, 500);
+  </script>
+</body>
+</html>
+)rawhtml";
+  server.send(200, "text/html", html);
+}
+
+void handleGet() {
+  String json = "{";
+  json += "\"voltage\":"      + String(g_vehicle.m_pdb_voltage)      + ",";
+  json += "\"current\":"      + String(g_vehicle.m_pdb_current)      + ",";
+  json += "\"rpm\":"          + String(g_vehicle.m_motor_rpm)         + ",";
+  json += "\"throttle_avg\":" + String(g_vehicle.m_throttle_average) + ",";
+  json += "\"throttle_raw\":" + String(g_vehicle.m_throttle_raw)     + ",";
+  json += "\"brake\":"        + String(brakeLights ? "true" : "false")      + ",";
+  json += "\"backrun\":"      + String(backrunningLights ? "true" : "false") + ",";
+  json += "\"hazard\":"       + String(hazard ? "true" : "false")            + ",";
+  json += "\"left\":"         + String(leftTurn ? "true" : "false")          + ",";
+  json += "\"right\":"        + String(rightTurn ? "true" : "false")         + "}";
+  server.send(200, "application/json", json);
+}
+
+void handlePost() {
+ server.send(200, "text/plain", "Processing Data");
+}
+
+
+
+void handleUpload() {
+ HTTPUpload& upload = server.upload();
+ if (upload.status == UPLOAD_FILE_START) {
+   Serial.println("Receiving data:");
+ } else if (upload.status == UPLOAD_FILE_WRITE) {
+   Serial.write(upload.buf, upload.currentSize);
+ } else if (upload.status == UPLOAD_FILE_END) {
+   server.send(200, "text/plain", "Data: ");
+ }
+}
+
+
+
+
 void setup() {
   g_vehicle.init_network(DevBoard::COMMUNICATIONS);
-  timer.begin(send_all_wrapper, 100000);
-  // Minimal SD init: create log file header if possible
-  SD.begin();
-  File f = SD.open("/can_log.csv", FILE_APPEND);
-  if (f) {
-    f.println("timestamp_ms,id,len,b0,b1,b2,b3,b4,b5,b6,b7");
-    f.close();
-  }
-  // Create a simple state CSV for higher-level variables
-  File s = SD.open("/can_state.csv", FILE_APPEND);
-  if (s) {
-    s.println("timestamp_ms,windshield,backrunning,turn,headlights,brakelights,hazard,pdb_current,pdb_voltage,motor_rpm,throttle_raw,throttle_avg,jm_current,jm_voltage,jm_energy");
-    s.close();
-  }
-  // TODO: rest of device setup
+  xTaskCreate(send_all, "Sending", 4096, nullptr, 5, nullptr);
+
+  Serial.begin(115200);
+
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(HR, OUTPUT);
   pinMode(HL, OUTPUT);
-  pinMode(BL, OUTPUT);
-  pinMode(HR, OUTPUT);
+  pinMode(RL, OUTPUT);
 
+
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(10);
+    Serial.print(".");
+
+  }
+  Serial.println("");
+  Serial.println("WiFi connected.");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  // Start the server
+  server.on("/", handleRoot);
+  server.on("/data", HTTP_GET, handleGet);
+  server.on("/get", HTTP_GET, handleGet);
+  server.on("/post", HTTP_POST, handlePost, handleUpload);
+  server.begin();
 }
 
 void readStates() {
@@ -63,74 +179,58 @@ void readStates() {
     hazard = false;
   }
 
-  // have to ask about turn bc currently no differentiation between left and right
+  if(g_vehicle.m_peripherals_turn == 2) {
+    rightTurn = true;
+  } else {
+    rightTurn = false;
+  }
 
+  if(g_vehicle.m_peripherals_turn == 1) {
+    leftTurn = true;
+  } else {
+    leftTurn = false;
+  }
+
+  
 }
 
-// periodic logger for  vehicle state (runs in loop)
-static unsigned long s_last_log = 0;
-void log_vehicle_state_if_due() {
-  unsigned long now = millis();
-  if (now - s_last_log < 1000) return; // log ~1s
-  s_last_log = now;
 
-  File f = SD.open("/can_state.csv", FILE_APPEND);
-  if (!f) return;
-  // timestamp and all relevant members from vehicle.hpp
-  // order matches header written in setup()
-  char buf[200];
-  int n = snprintf(buf, sizeof(buf), "%lu,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%u,%u,%u,%u,%lu\n",
-                   now,
-                   (unsigned)g_vehicle.m_peripherals_windshield,
-                   (unsigned)g_vehicle.m_peripherals_backrunninglights,
-                   (unsigned)g_vehicle.m_peripherals_turn,
-                   (unsigned)g_vehicle.m_peripherals_headlights,
-                   (unsigned)g_vehicle.m_peripherals_brakelights,
-                   (unsigned)g_vehicle.m_peripherals_hazard,
-                   (unsigned)g_vehicle.m_pdb_current,
-                   (unsigned)g_vehicle.m_pdb_voltage,
-                   (unsigned long)g_vehicle.m_motor_rpm,
-                   (unsigned)g_vehicle.m_throttle_raw,
-                   (unsigned)g_vehicle.m_throttle_average,
-                   (unsigned)g_vehicle.m_joulemeter_current,
-                   (unsigned)g_vehicle.m_joulemeter_voltage,
-                   (unsigned long)g_vehicle.m_joulemeter_energy);
-  if (n > 0) f.write((const uint8_t*)buf, n);
-  f.close();
+void printState() {
+  //delay(1000);
+  Serial.print("Voltage: ");
+  Serial.println(g_vehicle.m_pdb_voltage);
+  Serial.print("Current: ");
+  Serial.println(g_vehicle.m_pdb_current);
+  Serial.print("RPM: ");
+  Serial.println(g_vehicle.m_motor_rpm);
+  Serial.print("Throttle Avg: ");
+  Serial.println(g_vehicle.m_throttle_average);
+  Serial.print("Throttle Raw: ");
+  Serial.println(g_vehicle.m_throttle_raw);
+  
 }
 
 void loop() {
   // TODO: rest of device
+  server.handleClient();
   readStates();
 
-  if(millis() % 2000 >= 1000) {
-    if(hazard){
-      digitalWrite(HL, HIGH);
-      digitalWrite(HR, HIGH);
-    }
-    else if(leftTurn){
-      digitalWrite(FLH, HIGH);
-    }
-    else if(rightTurn) {
-      digitalWrite(FRH, HIGH);
-    }
+  if(hazard || leftTurn){
+    digitalWrite(HL, HIGH);
   }
-  else {
-    digitalWrite(HL, LOW);
-    digitalWrite(HR, LOW);
+
+  if(hazard || rightTurn){
+    digitalWrite(HR, HIGH);
   }
 
   if(backrunningLights) {
-    digitalWrite(RL, HIGH);
-  } else {
-    digitalWrite(RL, LOW);
-  }
+    analogWrite(RL,50);
+  } 
 
   if(brakeLights) {
-    digitalWrite(BL, HIGH);
-  } else {
-    digitalWrite(BL, LOW);
-  }
+    analogWrite(RL, 255);
+  } 
 
+  //printState();
 
 }

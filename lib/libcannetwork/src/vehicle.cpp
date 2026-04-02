@@ -4,10 +4,11 @@
 #if defined(ARDUINO_ARCH_ESP32)
 #include <ESP32-TWAI-CAN.hpp>
 #ifndef VEHICLE_TWAI_TX_PIN
-#define VEHICLE_TWAI_TX_PIN 25
+#define VEHICLE_TWAI_TX_PIN 33
 #endif
 #ifndef VEHICLE_TWAI_RX_PIN
-#define VEHICLE_TWAI_RX_PIN 35
+#define VEHICLE_TWAI_RX_PIN 34
+#endif
 #elif defined(CORE_TEENSY)
 #include <FlexCAN_T4.h>
 #else
@@ -153,7 +154,7 @@ void Vehicle::send_all() {
     break;
 
   case TEST_BOARD:
-    g_vehicle.send_message(0x700, 8, heartbeat)
+    g_vehicle.send_message(0x700, 8, heartbeat);
     break;
 
   default:
