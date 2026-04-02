@@ -8,6 +8,7 @@
 #endif
 #ifndef VEHICLE_TWAI_RX_PIN
 #define VEHICLE_TWAI_RX_PIN 35
+#endif
 #elif defined(CORE_TEENSY)
 #include <FlexCAN_T4.h>
 #else
@@ -181,7 +182,7 @@ void Vehicle::send_all() {
     break;
 
   case TEST_BOARD:
-    g_vehicle.send_message(0x700, 8, heartbeat)
+    g_vehicle.send_message(0x700, 8, heartbeat);
     break;
 
   default:
