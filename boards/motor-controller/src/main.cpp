@@ -78,7 +78,7 @@ void setup() {
 
 void loop() {
   uint8_t throttle = g_vehicle.m_throttle_average;
-  if(g_vehicle.m_pdb_motor_enabled){
+  if(!g_vehicle.m_pdb_motor_enabled){
     throttle = 0;
   }
   for(uint8_t i = 0; i < 200; i++)
