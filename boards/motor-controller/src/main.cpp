@@ -1,12 +1,15 @@
+
+
+
 #include <Arduino.h>
 #include <vehicle.hpp>
-// #define HWSERIAL Serial1  // serial port for debugging, bluetooth 
+
 
 #define HALL_1_PIN 27       // hall A
 #define HALL_2_PIN 26       // hall B
 #define HALL_3_PIN 25       // hall C
 
-// Pins from the Teensy to the gate drivers. AH = A high, etc
+
 #define AH_PIN 37            // on board, pin 16, need to switch bc of pwm error
 #define AL_PIN 36
 #define BH_PIN 19
@@ -14,16 +17,16 @@
 #define CH_PIN 23            // on board, pin 20, need to switch bc of pwm error
 #define CL_PIN 22
 
-#define HALL_STATES_PER_REV 6      // change this if needed
-#define RPM_WINDOW_MS 60000UL      // 60 seconds
+#define GEAR_RATIO 6     
+#define RPM_WINDOW_MS 60000UL   
 
-#define LED_PIN 13            // The teensy has a built-in LED on pin 13
+#define LED_PIN 13           
 
-#define HALL_OVERSAMPLE 4     // Hall oversampling count. More on this in the getHalls() function
+#define HALL_OVERSAMPLE 4     
 
-//uint8_t hallToMotor[8] = {255, 0, 2, 1, 4, 5, 3, 255}; // PROBLEM: how to know phase order? 
 
-uint8_t hallToMotor[8] = {255, 4, 0, 5, 2, 3, 1, 255}; // old motor state order from 24V motor 
+
+uint8_t hallToMotor[8] = {255, 4, 0, 5, 2, 3, 1, 255}; 
 
 volatile unsigned long hallStateChangeCount = 0;
 unsigned long rpmWindowStart = 0;
@@ -36,6 +39,8 @@ void writePhases(uint8_t ah, uint8_t bh, uint8_t ch, uint8_t al, uint8_t bl, uin
 uint8_t getHalls();
 void initRPMCounter();
 void updateRPMCounter(uint8_t hall);
+uint32_t revolutions = 0;
+uint16_t rpm = 0;
 
 IntervalTimer timer;
 void send_all_wrapper() {
@@ -67,20 +72,22 @@ void setup() {
 
   g_vehicle.init_network(DevBoard::MOTOR_CONTROLLER);
   timer.begin(send_all_wrapper, 100000);
+  delay(1000);
   initRPMCounter();
 }
 
 void loop() {
-  uint8_t throttle = 100;
+  uint8_t throttle = g_vehicle.m_throttle_average;
   for(uint8_t i = 0; i < 200; i++)
   {  
     uint8_t hall = getHalls();
-    Serial.println((int) hall);
+ 
     
     uint8_t motorState = hallToMotor[hall];
     writePWM(motorState, throttle);
     updateRPMCounter(hall);
   }
+  
 }
 
 void identifyHalls()
@@ -99,7 +106,6 @@ void identifyHalls()
   
     hallToMotor[getHalls()] = (i + 2) % 6;
   }
-  
   writePWM(0, 0);
 }
 
@@ -157,7 +163,7 @@ uint8_t getHalls()
 }
 
 void initRPMCounter() {
-  Serial.print("Starting RPM");
+  //Serial.print("Starting RPM");
   lastHallForRPM = getHalls();
   rpmWindowStart = millis();
 }
@@ -173,16 +179,15 @@ void updateRPMCounter(uint8_t hall) {
     }
   }
 
+
   unsigned long now = millis();
   if (now - rpmWindowStart >= RPM_WINDOW_MS) {
-    uint32_t revolutions = hallStateChangeCount / (30*(float)HALL_STATES_PER_REV);
-    uint32_t rpm = revolutions;   // because window is 60 seconds
-  
-    Serial.print("Hall changes in 60s: ");
-    Serial.print("RPM: ");
-    Serial.println(rpm);
+    revolutions = hallStateChangeCount/(30*GEAR_RATIO);
+    rpm = revolutions;
     g_vehicle.m_motor_rpm = rpm;
     hallStateChangeCount = 0;
     rpmWindowStart = now;
   }
 }
+
+
