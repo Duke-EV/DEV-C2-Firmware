@@ -16,7 +16,6 @@ const int SIGNALIN = 24; // signal in (from 0 to ~4.8*(3/5)=2.88v)
  * the 3/5 is from the voltage divider of (33k/(33k+22k))
  */
 
-const int DELAY_MS = 67;
 
 const int BAUD = 9600;
 
@@ -24,25 +23,16 @@ const int ENABLE = 6;
 const unsigned int WINDOW_SIZE = 100; // number of windows to do the moving average by
 
 volatile bool disable_throttle = false; 
-volatile unsigned long lastInterruptTime = 0;
-const unsigned long debounceDelay = 50; // ms
-// uint8_t throttle_output = 0;
-int long_throttle_output = 0;
+
+
 uint8_t last_throttle_output = 0;
-int curr_throttle_value = 0; // variable that checks if original throttle value changed by plus or minus 10 percent 
-int desired_rpm = 0; 
-int curr_rpm = 0; 
-int MAX_RPM = 2000; 
-float integral = 0.0;
-int duty_cycle = 0; 
-float k_p = 0.2; // current error 
-float k_i = 0.4; // long-term error
-int output_duty_cycle = 0; 
-float Ts = 0.01;
+int curr_throttle_value = 0;
+
 int signal = 0;
 int scaled_throttle_output = 0;
-void disableThrottleISR();
 int smoothed_output = 0;
+
+void disableThrottleISR();
 
 struct MovingAverage {
   std::deque<int> samples;
@@ -86,50 +76,30 @@ void setup() {
 MovingAverage ma{WINDOW_SIZE};
 
 void loop() {
+    if(disable_throttle == true) {
+      signal = 0;
+      scaled_throttle_output = 0;
+      g_vehicle.m_throttle_average = 0;
+      g_vehicle.m_throttle_raw = 0;
+    } else {
+      signal = analogRead(SIGNALIN);
+      scaled_throttle_output = std::min({(int)(signal * 3.1 / 2.8) >> 2, 255}); //divide to go from 1024 to 256
 
-  if(disable_throttle) {
-    //disable_throttle = false; --> WHEN TO RE-ENABLE THE THROTTLE SIGNAL?
-    signal = 0;
-  } else {
-    signal = analogRead(SIGNALIN);
-    scaled_throttle_output = std::min({(int)(signal * 3.1 / 2.8) >> 2, 255}); //divide to go from 1024 to 256
-    // long_throttle_output = (int)(signal * 3.1 / 2.8) >> 2; // dont send a uint_8 bc overflow sucks.
+      smoothed_output = ma.next(scaled_throttle_output);
 
-    Serial.print("Signal: ");
-    Serial.println(signal);
-    Serial.print("Scaled throttle: ");
-    Serial.println(scaled_throttle_output);
-    // Serial.print("duty cycle output: ");
-    // Serial.println(output_duty_cycle);
-  }
+      delay(10);
 
+      g_vehicle.m_throttle_raw = (uint16_t) signal; // raw throttle value
+      if (scaled_throttle_output < smoothed_output) {
+        smoothed_output = scaled_throttle_output;
+      }
 
-  if(disable_throttle) {
-    scaled_throttle_output = 0;
-  }
-  
-  smoothed_output = ma.next(scaled_throttle_output);
-
-  last_throttle_output =  curr_throttle_value;
-
-  delay(10);
-
-  // put whatever we send into final_number.
-  // int final_number = long_throttle_output;
-  g_vehicle.m_throttle_raw = (uint16_t) signal; // raw throttle value
-  if (scaled_throttle_output < smoothed_output) {
-    smoothed_output = scaled_throttle_output;
-  }
-
-  g_vehicle.m_throttle_average = (uint16_t) smoothed_output; // moving average, scaled to unit_8 range
-  Serial.print("Averaged Throttle with brake correction: ");
-  Serial.println(smoothed_output);
+      g_vehicle.m_throttle_average = (uint16_t) smoothed_output; // moving average, scaled to unit_8 range
+    }
+    
 }
 
 void disableThrottleISR() {
-  unsigned long now = millis();
-  if (now - lastInterruptTime > debounceDelay) {
-    disable_throttle = true;
-    lastInterruptTime = now;
-  }
+  disable_throttle = true;
+  
 }

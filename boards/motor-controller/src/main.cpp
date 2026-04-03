@@ -1,6 +1,7 @@
 
 
 
+
 #include <Arduino.h>
 #include <vehicle.hpp>
 
@@ -18,7 +19,7 @@
 #define CL_PIN 22
 
 #define GEAR_RATIO 6     
-#define RPM_WINDOW_MS 60000UL   
+#define RPM_WINDOW_MS 100  
 
 #define LED_PIN 13           
 
@@ -39,8 +40,8 @@ void writePhases(uint8_t ah, uint8_t bh, uint8_t ch, uint8_t al, uint8_t bl, uin
 uint8_t getHalls();
 void initRPMCounter();
 void updateRPMCounter(uint8_t hall);
-uint32_t revolutions = 0;
-uint16_t rpm = 0;
+float revolutions = 0;
+float rpm = 0;
 
 IntervalTimer timer;
 void send_all_wrapper() {
@@ -166,7 +167,6 @@ uint8_t getHalls()
 }
 
 void initRPMCounter() {
-  //Serial.print("Starting RPM");
   lastHallForRPM = getHalls();
   rpmWindowStart = millis();
 }
@@ -184,13 +184,13 @@ void updateRPMCounter(uint8_t hall) {
 
 
   unsigned long now = millis();
+  // counting rpm over a 100ms period
   if (now - rpmWindowStart >= RPM_WINDOW_MS) {
-    revolutions = hallStateChangeCount/(30*GEAR_RATIO);
-    rpm = revolutions;
-    g_vehicle.m_motor_rpm = rpm;
+    revolutions = hallStateChangeCount/(30.0*GEAR_RATIO);
+    // convert RPM window to minutes 
+    rpm = revolutions/(RPM_WINDOW_MS/60000.0f);
+    g_vehicle.m_motor_rpm = (uint16_t) rpm;
     hallStateChangeCount = 0;
     rpmWindowStart = now;
   }
 }
-
-
