@@ -54,7 +54,6 @@ void setup() {
   analogReadResolution(10);  
 
   pinMode(LED_PIN, OUTPUT);
-  digitalWriteFast(LED_PIN, HIGH);
 
   pinMode(AH_PIN, OUTPUT);
   pinMode(AL_PIN, OUTPUT);
@@ -73,7 +72,10 @@ void setup() {
 
   g_vehicle.init_network(DevBoard::MOTOR_CONTROLLER);
   timer.begin(send_all_wrapper, 100000);
+
+  digitalWriteFast(LED_PIN, HIGH);
   delay(1000);
+  digitalWriteFast(LED_PIN, LOW);
   initRPMCounter();
 }
 
@@ -81,6 +83,9 @@ void loop() {
   uint8_t throttle = g_vehicle.m_throttle_average;
   if(!g_vehicle.m_pdb_motor_enabled){
     throttle = 0;
+    digitalWriteFast(LED_PIN, LOW);
+  } else{
+    digitalWriteFast(LED_PIN, HIGH);
   }
   for(uint8_t i = 0; i < 200; i++)
   {  
