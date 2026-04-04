@@ -10,22 +10,19 @@
 #include <RemoteXY.h>
 
 #pragma pack(push, 1)  
-uint8_t const PROGMEM RemoteXY_CONF_PROGMEM[] =   // 154 bytes V19 
-  { 255,0,0,10,0,147,0,19,0,0,0,0,31,1,106,200,1,1,9,0,
-  71,15,4,80,80,56,16,2,24,135,0,0,0,0,0,0,200,66,0,0,
-  160,65,0,0,32,65,0,0,0,64,24,0,67,58,82,40,10,86,2,26,
-  67,58,102,40,10,86,2,26,67,58,123,40,10,86,2,26,67,58,144,40,
-  10,86,2,26,129,8,82,41,12,64,17,86,111,108,116,97,103,101,0,129,
-  8,101,40,12,64,17,67,117,114,114,101,110,116,0,129,2,124,53,9,64,
-  17,84,104,114,111,116,116,108,101,95,82,97,119,0,129,4,144,51,9,64,
-  17,84,104,114,111,116,116,108,101,95,65,118,103,0 };
+uint8_t const PROGMEM RemoteXY_CONF_PROGMEM[] =   // 85 bytes V19 
+  { 255,0,0,12,0,78,0,19,0,0,0,0,31,1,106,200,1,1,5,0,
+  71,18,6,71,71,56,16,2,24,135,0,0,0,0,0,0,200,66,0,0,
+  160,65,0,0,32,65,0,0,0,64,24,0,67,33,78,40,10,86,93,201,
+  67,34,107,40,10,86,2,33,67,34,133,40,10,86,2,145,67,34,160,40,
+  10,78,2,229,2 };
 
 struct {
-  int16_t speed;          // gauge, 0 to 100
-  int16_t Voltage_PDB;
-  int16_t Current_PDB;
-  int16_t Throttle_raw;
-  int16_t Throttle_Avg;
+  int16_t Speed;
+  int16_t Voltage;
+  int16_t Current;
+  int16_t Throttle_Raw;
+  float Throttle_Avg;
   uint8_t connect_flag;
 } RemoteXY;   
 #pragma pack(pop)
@@ -106,10 +103,10 @@ void loop() {
 
     float spd = (3.14 * g_vehicle.m_motor_rpm * 0.58 * 60) / 1000.0;
 
-    RemoteXY.speed        = (int16_t)spd;
-    RemoteXY.Voltage_PDB  = g_vehicle.m_pdb_voltage;
-    RemoteXY.Current_PDB  = g_vehicle.m_pdb_current;
-    RemoteXY.Throttle_raw = g_vehicle.m_throttle_raw;
-    RemoteXY.Throttle_Avg = g_vehicle.m_throttle_average;
+    RemoteXY.Speed        = (int16_t)spd;
+    RemoteXY.Voltage      = g_vehicle.m_pdb_voltage;
+    RemoteXY.Current      = g_vehicle.m_pdb_current;
+    RemoteXY.Throttle_Raw = g_vehicle.m_throttle_raw;
+    RemoteXY.Throttle_Avg = (float)g_vehicle.m_throttle_average;
   }
 }
