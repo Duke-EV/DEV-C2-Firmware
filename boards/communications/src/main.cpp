@@ -46,6 +46,7 @@ void send_all(void *args) {
   }
 }
 
+File dataFile;
 void write_to_sd(void *args) {
   while(true) {
     dataFile.print(millis());
@@ -63,7 +64,6 @@ void write_to_sd(void *args) {
   }
 }
 
-File dataFile;
 bool hazard = false;
 bool leftTurn = false;
 bool rightTurn = false;
@@ -80,7 +80,7 @@ void setup() {
   Serial.begin(115200);
 
   int count = 0;
-  File countFile = SD.open("count.txt", FILE_READ);
+  File countFile = SD.open("/count.txt", FILE_READ);
   if (countFile) {
     count = countFile.parseInt();
     countFile.close();
@@ -88,13 +88,13 @@ void setup() {
 
   // Increment and save it back
   count++;
-  SD.remove("count.txt");
-  countFile = SD.open("count.txt", FILE_WRITE);
+  SD.remove("/count.txt");
+  countFile = SD.open("/count.txt", FILE_WRITE);
   countFile.println(count);
   countFile.close();
 
   char filename[16];
-  snprintf(filename, 16, "log%d.csv", count);
+  snprintf(filename, 16, "/log%d.csv", count);
 
   dataFile = SD.open(filename, FILE_WRITE);
   Serial.print("Logging to: ");
