@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <deque>
 
+
 const int SIGNALIN = 24; // signal in (from 0 to ~4.8*(3/5)=2.88v)
 /**
  * the 4.8 volts was measured with the multimeter
@@ -19,8 +20,11 @@ const int SIGNALIN = 24; // signal in (from 0 to ~4.8*(3/5)=2.88v)
 
 const int BAUD = 9600;
 
+int CURRENT_CAP = 17000;
+
 const int ENABLE = 6;
-int WINDOW_SIZE = 500; // number of windows to do the moving average by
+int WINDOW_SIZE = 500; // number of windows to do the moving average by. 
+// time to reach a pressed value is (WINDOW_SIZE / * 10) milliseconds 
 
 volatile bool disable_throttle = false; 
 
@@ -33,7 +37,9 @@ int scaled_throttle_output = 0;
 int smoothed_output = 0;
 void slowDeacceleration();
 
+int throttle_cap = 255;
 
+int flag = 0; // so that it doesn't keep updating the throttle cap when the current is above 17000
 
 //void disableThrottleISR();
 
@@ -88,7 +94,7 @@ void loop() {
     } 
     */
 
-    if(g_vehicle.m_pdb_current >= 15000) {
+    if(g_vehicle.m_pdb_current >= 19800) { // if current is this high something is wrong so do a hard reset.
       slowDeacceleration();
 
       for (int i = 0; i < WINDOW_SIZE; i++){
@@ -96,17 +102,35 @@ void loop() {
       }
     }
 
+    int nstgbtpo = 7; // num_samples_to_go_back_to_prevent_overshoot, time is value * 10 in ms
+    if (g_vehicle.m_pdb_current >=  CURRENT_CAP && flag == 0) {
+      throttle_cap = ma.samples.size() > nstgbtpo ? ma.samples[ma.samples.size() - nstgbtpo] : 0; // get the throttle value 
+      flag = 1;
+    }
+
+    if (g_vehicle.m_pdb_current <  CURRENT_CAP && flag == 1) {
+      flag = 0; // the cap should only be reset on instants where you just exceeded the current cap
+    }
+
     signal = analogRead(SIGNALIN);
     scaled_throttle_output = std::min({(int)(signal * 3.1 / 2.8) >> 2, 255}); //divide to go from 1024 to 256
+
+    if (scaled_throttle_output > throttle_cap) {
+      scaled_throttle_output = throttle_cap;
+    }
 
     smoothed_output = ma.next(scaled_throttle_output);
 
     delay(10);
 
     g_vehicle.m_throttle_raw = (uint16_t) signal; // raw throttle value
+
+
+
     if (scaled_throttle_output < smoothed_output) {
       smoothed_output = scaled_throttle_output;
     }
+
 
     // gradually step up the throttle value until we reach the target, but check for disable throttle 
 
@@ -124,8 +148,8 @@ void slowDeacceleration() {
   // every 100 ms drop the duty cycle by 50 till it hits 0 
   // should be a BLOCKING function
 
-  while(g_vehicle.m_throttle_average != 0) {
-    g_vehicle.m_throttle_average -= 50;
+  while(g_vehicle.m_throttle_average > 0) {
+    g_vehicle.m_throttle_average = g_vehicle.m_throttle_average - 50 > 0 ? g_vehicle.m_throttle_average-50 : 0;
     delay(100);
   }
 
