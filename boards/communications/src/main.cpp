@@ -5,45 +5,27 @@
 #define REMOTEXY_MODE__ESP32CORE_BLE
 #include <BLEDevice.h>
 
-#define REMOTEXY_BLUETOOTH_NAME "DEV-ESP32"
+#define REMOTEXY_BLUETOOTH_NAME "DEV"
 
 #include <RemoteXY.h>
 
 #pragma pack(push, 1)  
-uint8_t const PROGMEM RemoteXY_CONF_PROGMEM[] =   // 343 bytes V19 
-  { 255,0,0,25,0,80,1,19,0,0,0,0,31,1,106,200,1,1,24,0,
-  71,252,5,55,55,56,0,2,24,174,0,0,0,0,0,0,112,66,0,0,
-  160,65,0,0,32,65,0,0,0,64,24,0,71,46,7,59,59,56,0,2,
-  24,135,0,0,0,0,0,0,200,66,0,0,160,65,0,0,32,65,0,0,
-  0,64,24,0,70,21,131,10,10,16,26,37,0,129,4,134,13,5,64,17,
-  66,114,97,107,101,0,129,4,147,11,5,64,17,66,97,99,107,0,129,4,
-  159,16,5,64,17,72,97,122,97,114,100,0,70,22,144,10,10,16,26,37,
-  0,70,22,157,10,10,16,26,37,0,70,22,171,10,10,16,26,37,0,70,
-  22,186,10,10,16,26,37,0,129,5,173,11,6,64,17,76,101,102,116,0,
-  129,4,188,14,6,64,17,82,105,103,104,116,0,67,68,132,32,12,86,2,
-  26,129,45,134,20,7,64,17,83,112,101,101,100,0,67,68,148,32,10,86,
-  2,26,67,68,163,32,10,86,2,26,67,68,177,33,10,86,2,26,129,39,
-  150,27,5,64,17,116,104,114,111,116,116,108,101,95,97,118,103,0,129,34,
-  164,32,6,64,17,116,104,114,111,116,116,108,101,95,114,97,119,0,129,52,
-  179,13,6,64,17,82,80,77,0,67,68,62,32,6,86,2,26,67,69,72,
-  31,6,86,2,26,129,25,61,38,7,64,17,80,68,66,32,118,111,108,116,
-  97,103,101,0,129,25,72,34,6,64,17,80,68,66,95,99,117,114,114,101,
-  110,116,0 };
+uint8_t const PROGMEM RemoteXY_CONF_PROGMEM[] =   // 154 bytes V19 
+  { 255,0,0,10,0,147,0,19,0,0,0,0,31,1,106,200,1,1,9,0,
+  71,15,4,80,80,56,16,2,24,135,0,0,0,0,0,0,200,66,0,0,
+  160,65,0,0,32,65,0,0,0,64,24,0,67,58,82,40,10,86,2,26,
+  67,58,102,40,10,86,2,26,67,58,123,40,10,86,2,26,67,58,144,40,
+  10,86,2,26,129,8,82,41,12,64,17,86,111,108,116,97,103,101,0,129,
+  8,101,40,12,64,17,67,117,114,114,101,110,116,0,129,2,124,53,9,64,
+  17,84,104,114,111,116,116,108,101,95,82,97,119,0,129,4,144,51,9,64,
+  17,84,104,114,111,116,116,108,101,95,65,118,103,0 };
 
 struct {
-  float speed_display;
-  float rpm_display;
-  uint8_t brake;
-  uint8_t led_01;
-  uint8_t led_02;
-  uint8_t led_03;
-  uint8_t led_04;
-  int16_t speed;
-  int16_t throttle_avg;
-  int16_t throttle_raw;
-  int16_t value_01;
-  int16_t pdb_voltage;
-  int16_t pdb_current;
+  int16_t speed;          // gauge, 0 to 100
+  int16_t Voltage_PDB;
+  int16_t Current_PDB;
+  int16_t Throttle_raw;
+  int16_t Throttle_Avg;
   uint8_t connect_flag;
 } RemoteXY;   
 #pragma pack(pop)
@@ -94,19 +76,6 @@ void readStates() {
   leftTurn          = (g_vehicle.m_peripherals_turn == 1);
 }
 
-void printState() {
-  Serial.print("Voltage: ");
-  Serial.println(g_vehicle.m_pdb_voltage);
-  Serial.print("Current: ");
-  Serial.println(g_vehicle.m_pdb_current);
-  Serial.print("RPM: ");
-  Serial.println(g_vehicle.m_motor_rpm);
-  Serial.print("Throttle Avg: ");
-  Serial.println(g_vehicle.m_throttle_average);
-  Serial.print("Throttle Raw: ");
-  Serial.println(g_vehicle.m_throttle_raw);
-}
-
 void loop() {
   RemoteXY_Handler();
   readStates();
@@ -137,20 +106,10 @@ void loop() {
 
     float spd = (3.14 * g_vehicle.m_motor_rpm * 0.58 * 60) / 1000.0;
 
-    RemoteXY.speed_display = spd;
-    RemoteXY.rpm_display   = g_vehicle.m_motor_rpm;
-
-    RemoteXY.brake  = brakeLights ? 1 : 0;
-    RemoteXY.led_01 = backrunningLights ? 1 : 0;
-    RemoteXY.led_02 = hazard ? 1 : 0;
-    RemoteXY.led_03 = leftTurn ? 1 : 0;
-    RemoteXY.led_04 = rightTurn ? 1 : 0;
-
     RemoteXY.speed        = (int16_t)spd;
-    RemoteXY.throttle_avg = g_vehicle.m_throttle_average;
-    RemoteXY.throttle_raw = g_vehicle.m_throttle_raw;
-    RemoteXY.value_01     = g_vehicle.m_motor_rpm;
-    RemoteXY.pdb_voltage  = g_vehicle.m_pdb_voltage;
-    RemoteXY.pdb_current  = g_vehicle.m_pdb_current;
+    RemoteXY.Voltage_PDB  = g_vehicle.m_pdb_voltage;
+    RemoteXY.Current_PDB  = g_vehicle.m_pdb_current;
+    RemoteXY.Throttle_raw = g_vehicle.m_throttle_raw;
+    RemoteXY.Throttle_Avg = g_vehicle.m_throttle_average;
   }
 }
