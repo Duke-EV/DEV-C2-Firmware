@@ -1,49 +1,28 @@
 #include <Arduino.h>
 #include <vehicle.hpp>
+#include <SD.h>
 #include <Ticker.h>
 
 #define REMOTEXY_MODE__ESP32CORE_BLE
 #include <BLEDevice.h>
 
-#define REMOTEXY_BLUETOOTH_NAME "DEV-ESP32"
-
+#define REMOTEXY_BLUETOOTH_NAME "DEV-Raw"
 #include <RemoteXY.h>
 
 #pragma pack(push, 1)  
-uint8_t const PROGMEM RemoteXY_CONF_PROGMEM[] =   // 343 bytes V19 
-  { 255,0,0,25,0,80,1,19,0,0,0,0,31,1,106,200,1,1,24,0,
-  71,252,5,55,55,56,0,2,24,174,0,0,0,0,0,0,112,66,0,0,
-  160,65,0,0,32,65,0,0,0,64,24,0,71,46,7,59,59,56,0,2,
-  24,135,0,0,0,0,0,0,200,66,0,0,160,65,0,0,32,65,0,0,
-  0,64,24,0,70,21,131,10,10,16,26,37,0,129,4,134,13,5,64,17,
-  66,114,97,107,101,0,129,4,147,11,5,64,17,66,97,99,107,0,129,4,
-  159,16,5,64,17,72,97,122,97,114,100,0,70,22,144,10,10,16,26,37,
-  0,70,22,157,10,10,16,26,37,0,70,22,171,10,10,16,26,37,0,70,
-  22,186,10,10,16,26,37,0,129,5,173,11,6,64,17,76,101,102,116,0,
-  129,4,188,14,6,64,17,82,105,103,104,116,0,67,68,132,32,12,86,2,
-  26,129,45,134,20,7,64,17,83,112,101,101,100,0,67,68,148,32,10,86,
-  2,26,67,68,163,32,10,86,2,26,67,68,177,33,10,86,2,26,129,39,
-  150,27,5,64,17,116,104,114,111,116,116,108,101,95,97,118,103,0,129,34,
-  164,32,6,64,17,116,104,114,111,116,116,108,101,95,114,97,119,0,129,52,
-  179,13,6,64,17,82,80,77,0,67,68,62,32,6,86,2,26,67,69,72,
-  31,6,86,2,26,129,25,61,38,7,64,17,80,68,66,32,118,111,108,116,
-  97,103,101,0,129,25,72,34,6,64,17,80,68,66,95,99,117,114,114,101,
-  110,116,0 };
+uint8_t const PROGMEM RemoteXY_CONF_PROGMEM[] =   // 85 bytes V19 
+  { 255,0,0,12,0,78,0,19,0,0,0,0,31,1,106,200,1,1,5,0,
+  71,18,6,71,71,56,16,2,24,135,0,0,0,0,0,0,200,66,0,0,
+  160,65,0,0,32,65,0,0,0,64,24,0,67,33,78,40,10,86,93,201,
+  67,34,107,40,10,86,2,33,67,34,133,40,10,86,2,145,67,34,160,40,
+  10,78,2,229,2 };
 
 struct {
-  float speed_display;
-  float rpm_display;
-  uint8_t brake;
-  uint8_t led_01;
-  uint8_t led_02;
-  uint8_t led_03;
-  uint8_t led_04;
-  int16_t speed;
-  int16_t throttle_avg;
-  int16_t throttle_raw;
-  int16_t value_01;
-  int16_t pdb_voltage;
-  int16_t pdb_current;
+  int16_t Speed;
+  int16_t Voltage;
+  int16_t Current;
+  int16_t Throttle_Raw;
+  float Throttle_Avg;
   uint8_t connect_flag;
 } RemoteXY;   
 #pragma pack(pop)
@@ -54,6 +33,7 @@ const long interval = 500;
 #define RL 22
 #define HL 16
 #define HR 17
+#define SD_CARD_SLOT 5
 
 #ifndef LED_BUILTIN
 #define LED_BUILTIN 2
@@ -66,6 +46,24 @@ void send_all(void *args) {
   }
 }
 
+void write_to_sd(void *args) {
+  while(true) {
+    dataFile.print(millis());
+    dataFile.print(",");
+    dataFile.print(g_vehicle.m_motor_rpm);
+    dataFile.print(",");
+    dataFile.print(g_vehicle.m_pdb_current);
+    dataFile.print(",");
+    dataFile.print(g_vehicle.m_throttle_average);
+    dataFile.print(",");
+    dataFile.println(g_vehicle.m_throttle_raw);  // println only on the last one
+
+    dataFile.flush();
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
+}
+
+File dataFile;
 bool hazard = false;
 bool leftTurn = false;
 bool rightTurn = false;
@@ -74,11 +72,37 @@ bool brakeLights = false;
 
 void setup() {
   RemoteXY_Init();
+  SD.begin(SD_CARD_SLOT);
 
   g_vehicle.init_network(DevBoard::COMMUNICATIONS);
   xTaskCreate(send_all, "Sending", 4096, nullptr, 5, nullptr);
 
   Serial.begin(115200);
+
+  int count = 0;
+  File countFile = SD.open("count.txt", FILE_READ);
+  if (countFile) {
+    count = countFile.parseInt();
+    countFile.close();
+  }
+
+  // Increment and save it back
+  count++;
+  SD.remove("count.txt");
+  countFile = SD.open("count.txt", FILE_WRITE);
+  countFile.println(count);
+  countFile.close();
+
+  char filename[16];
+  snprintf(filename, 16, "log%d.csv", count);
+
+  dataFile = SD.open(filename, FILE_WRITE);
+  Serial.print("Logging to: ");
+  Serial.println(filename);
+
+  dataFile.println("timestamp_ms,rpm,current,throttle_avg,throttle_raw");
+
+  xTaskCreate(write_to_sd, "Writing to SD", 4096, nullptr, 5, nullptr);
 
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(HR, OUTPUT);
@@ -92,19 +116,6 @@ void readStates() {
   hazard            = (g_vehicle.m_peripherals_hazard == 1);
   rightTurn         = (g_vehicle.m_peripherals_turn == 2);
   leftTurn          = (g_vehicle.m_peripherals_turn == 1);
-}
-
-void printState() {
-  Serial.print("Voltage: ");
-  Serial.println(g_vehicle.m_pdb_voltage);
-  Serial.print("Current: ");
-  Serial.println(g_vehicle.m_pdb_current);
-  Serial.print("RPM: ");
-  Serial.println(g_vehicle.m_motor_rpm);
-  Serial.print("Throttle Avg: ");
-  Serial.println(g_vehicle.m_throttle_average);
-  Serial.print("Throttle Raw: ");
-  Serial.println(g_vehicle.m_throttle_raw);
 }
 
 void loop() {
@@ -137,20 +148,10 @@ void loop() {
 
     float spd = (3.14 * g_vehicle.m_motor_rpm * 0.58 * 60) / 1000.0;
 
-    RemoteXY.speed_display = spd;
-    RemoteXY.rpm_display   = g_vehicle.m_motor_rpm;
-
-    RemoteXY.brake  = brakeLights ? 1 : 0;
-    RemoteXY.led_01 = backrunningLights ? 1 : 0;
-    RemoteXY.led_02 = hazard ? 1 : 0;
-    RemoteXY.led_03 = leftTurn ? 1 : 0;
-    RemoteXY.led_04 = rightTurn ? 1 : 0;
-
-    RemoteXY.speed        = (int16_t)spd;
-    RemoteXY.throttle_avg = g_vehicle.m_throttle_average;
-    RemoteXY.throttle_raw = g_vehicle.m_throttle_raw;
-    RemoteXY.value_01     = g_vehicle.m_motor_rpm;
-    RemoteXY.pdb_voltage  = g_vehicle.m_pdb_voltage;
-    RemoteXY.pdb_current  = g_vehicle.m_pdb_current;
+    RemoteXY.Speed        = (int16_t)spd;
+    RemoteXY.Voltage      = g_vehicle.m_pdb_voltage;
+    RemoteXY.Current      = g_vehicle.m_pdb_current;
+    RemoteXY.Throttle_Raw = g_vehicle.m_throttle_raw;
+    RemoteXY.Throttle_Avg = (float)g_vehicle.m_throttle_average;
   }
 }
