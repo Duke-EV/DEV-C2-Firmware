@@ -1,7 +1,3 @@
-
-
-
-
 #include <Arduino.h>
 #include <vehicle.hpp>
 
