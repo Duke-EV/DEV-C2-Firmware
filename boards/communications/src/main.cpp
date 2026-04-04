@@ -1,29 +1,66 @@
 #include <Arduino.h>
 #include <vehicle.hpp>
-#include <SD.h>
 #include <Ticker.h>
 
-#include <WiFi.h>
-#include <WebServer.h>
+#define REMOTEXY_MODE__ESP32CORE_BLE
+#include <BLEDevice.h>
 
+#define REMOTEXY_BLUETOOTH_NAME "DEV-ESP32"
 
-#define RL 22 //red light
-#define HL 16 //hazard left
-#define HR 17 //hazard right 
+#include <RemoteXY.h>
+
+#pragma pack(push, 1)  
+uint8_t const PROGMEM RemoteXY_CONF_PROGMEM[] =   // 343 bytes V19 
+  { 255,0,0,25,0,80,1,19,0,0,0,0,31,1,106,200,1,1,24,0,
+  71,252,5,55,55,56,0,2,24,174,0,0,0,0,0,0,112,66,0,0,
+  160,65,0,0,32,65,0,0,0,64,24,0,71,46,7,59,59,56,0,2,
+  24,135,0,0,0,0,0,0,200,66,0,0,160,65,0,0,32,65,0,0,
+  0,64,24,0,70,21,131,10,10,16,26,37,0,129,4,134,13,5,64,17,
+  66,114,97,107,101,0,129,4,147,11,5,64,17,66,97,99,107,0,129,4,
+  159,16,5,64,17,72,97,122,97,114,100,0,70,22,144,10,10,16,26,37,
+  0,70,22,157,10,10,16,26,37,0,70,22,171,10,10,16,26,37,0,70,
+  22,186,10,10,16,26,37,0,129,5,173,11,6,64,17,76,101,102,116,0,
+  129,4,188,14,6,64,17,82,105,103,104,116,0,67,68,132,32,12,86,2,
+  26,129,45,134,20,7,64,17,83,112,101,101,100,0,67,68,148,32,10,86,
+  2,26,67,68,163,32,10,86,2,26,67,68,177,33,10,86,2,26,129,39,
+  150,27,5,64,17,116,104,114,111,116,116,108,101,95,97,118,103,0,129,34,
+  164,32,6,64,17,116,104,114,111,116,116,108,101,95,114,97,119,0,129,52,
+  179,13,6,64,17,82,80,77,0,67,68,62,32,6,86,2,26,67,69,72,
+  31,6,86,2,26,129,25,61,38,7,64,17,80,68,66,32,118,111,108,116,
+  97,103,101,0,129,25,72,34,6,64,17,80,68,66,95,99,117,114,114,101,
+  110,116,0 };
+
+struct {
+  float speed_display;
+  float rpm_display;
+  uint8_t brake;
+  uint8_t led_01;
+  uint8_t led_02;
+  uint8_t led_03;
+  uint8_t led_04;
+  int16_t speed;
+  int16_t throttle_avg;
+  int16_t throttle_raw;
+  int16_t value_01;
+  int16_t pdb_voltage;
+  int16_t pdb_current;
+  uint8_t connect_flag;
+} RemoteXY;   
+#pragma pack(pop)
+
+unsigned long previousMillis = 0;
+const long interval = 500;
+
+#define RL 22
+#define HL 16
+#define HR 17
 
 #ifndef LED_BUILTIN
 #define LED_BUILTIN 2
 #endif
 
-const char *ssid = "DukeOpen";
-const char *password = "";
-WebServer server(80);
-IPAddress local_IP(192, 168, 1, 184);
-IPAddress gateway(192, 168, 1, 1);
-
-
 void send_all(void *args) {
-  while(true) {
+  while (true) {
     g_vehicle.send_all();
     vTaskDelay(pdMS_TO_TICKS(100));
   }
@@ -35,109 +72,9 @@ bool rightTurn = false;
 bool backrunningLights = false;
 bool brakeLights = false;
 
-
-bool sdReady = false;
-
-//void logVehicleState();
-
-
-void handleRoot() {
-  String html = R"rawhtml(
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Vehicle Dashboard</title>
-  <style>
-    body { font-family: monospace; background: #111; color: #0f0; padding: 20px; }
-    h1 { color: #fff; }
-    .card { background: #222; border: 1px solid #0f0; border-radius: 6px; padding: 16px; margin: 8px 0; }
-    .label { color: #aaa; font-size: 0.85em; }
-    .value { font-size: 1.5em; font-weight: bold; }
-    .on  { color: #0f0; }
-    .off { color: #555; }
-  </style>
-</head>
-<body>
-  <h1>Vehicle Dashboard</h1>
-  <div class="card"><span class="label">Voltage</span><br><span class="value" id="voltage">--</span> V</div>
-  <div class="card"><span class="label">Current</span><br><span class="value" id="current">--</span> A</div>
-  <div class="card"><span class="label">Motor RPM</span><br><span class="value" id="rpm">--</span></div>
-  <div class="card"><span class="label">Car Speed</span><br><span class="value" id="rpm">--</span>km/hr</div>
-  <div class="card"><span class="label">Throttle Avg</span><br><span class="value" id="throttle_avg">--</span></div>
-  <div class="card"><span class="label">Throttle Raw</span><br><span class="value" id="throttle_raw">--</span></div>
-  <div class="card">
-    <span class="label">Lights</span><br>
-    <span id="brake">Brake</span> &nbsp;
-    <span id="backrun">Back Running</span> &nbsp;
-    <span id="hazard">Hazard</span> &nbsp;
-    <span id="left">Left Turn</span> &nbsp;
-    <span id="right">Right Turn</span> &nbsp;
-    <span id="enable">Motor Enable</span>
-  </div>
-  <script>
-    function update() {
-      fetch('/data').then(r => r.json()).then(d => {
-        document.getElementById('voltage').textContent      = d.voltage;
-        document.getElementById('current').textContent      = d.current;
-        document.getElementById('rpm').textContent          = d.rpm;
-        document.getElementById('speed').textContent          = d.speed;
-        document.getElementById('throttle_avg').textContent = d.throttle_avg;
-        document.getElementById('throttle_raw').textContent = d.throttle_raw;
-        ['brake','backrun','hazard','left','right' ,'enable'].forEach(k => {
-          const el = document.getElementById(k);
-          el.className = d[k] ? 'on' : 'off';
-        });
-      });
-    }
-    update();
-    setInterval(update, 500);
-  </script>
-</body>
-</html>
-)rawhtml";
-  server.send(200, "text/html", html);
-}
-
-void handleGet() {
-  String json = "{";
-  json += "\"voltage\":"      + String(g_vehicle.m_pdb_voltage/1000.0)      + ",";
-  json += "\"current\":"      + String(g_vehicle.m_pdb_current/1000.0)      + ",";
-  json += "\"rpm\":"          + String(g_vehicle.m_motor_rpm)         + ",";
-  json += "\"speed\":"        + String((3.14 * g_vehicle.m_motor_rpm * 0.58 * 60)/1000)         + ",";
-  json += "\"throttle_avg\":" + String(g_vehicle.m_throttle_average) + ",";
-  json += "\"throttle_raw\":" + String(g_vehicle.m_throttle_raw)     + ",";
-  json += "\"brake\":"        + String(brakeLights ? "true" : "false")      + ",";
-  json += "\"backrun\":"      + String(backrunningLights ? "true" : "false") + ",";
-  json += "\"hazard\":"       + String(hazard ? "true" : "false")            + ",";
-  json += "\"left\":"         + String(leftTurn ? "true" : "false")          + ",";
-  json += "\"right\":"        + String(rightTurn ? "true" : "false")         + ",";
-  json += "\"enable\":"        + String(g_vehicle.m_pdb_motor_enabled ? "true" : "false")         + "}";
-  
-  server.send(200, "application/json", json);
-}
-
-void handlePost() {
- server.send(200, "text/plain", "Processing Data");
-}
-
-
-
-void handleUpload() {
- HTTPUpload& upload = server.upload();
- if (upload.status == UPLOAD_FILE_START) {
-   Serial.println("Receiving data:");
- } else if (upload.status == UPLOAD_FILE_WRITE) {
-   Serial.write(upload.buf, upload.currentSize);
- } else if (upload.status == UPLOAD_FILE_END) {
-   server.send(200, "text/plain", "Data: ");
- }
-}
-
-
-
-
 void setup() {
+  RemoteXY_Init();
+
   g_vehicle.init_network(DevBoard::COMMUNICATIONS);
   xTaskCreate(send_all, "Sending", 4096, nullptr, 5, nullptr);
 
@@ -147,64 +84,17 @@ void setup() {
   pinMode(HR, OUTPUT);
   pinMode(HL, OUTPUT);
   pinMode(RL, OUTPUT);
-
-
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(10);
-    Serial.print(".");
-
-  }
-  Serial.println("");
-  Serial.println("WiFi connected.");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
-
-  // Start the server
-  server.on("/", handleRoot);
-  server.on("/data", HTTP_GET, handleGet);
-  server.on("/get", HTTP_GET, handleGet);
-  server.on("/post", HTTP_POST, handlePost, handleUpload);
-  server.begin();
 }
 
 void readStates() {
-  if (g_vehicle.m_peripherals_backrunninglights == 1) {
-    backrunningLights = true;
-  } else {
-    backrunningLights = false;
-  }
-
-  if(g_vehicle.m_peripherals_brakelights == 1) {
-    brakeLights = true;
-  } else {
-    brakeLights = false;
-  }
-
-  if(g_vehicle.m_peripherals_hazard == 1) {
-    hazard = true;
-  } else {
-    hazard = false;
-  }
-
-  if(g_vehicle.m_peripherals_turn == 2) {
-    rightTurn = true;
-  } else {
-    rightTurn = false;
-  }
-
-  if(g_vehicle.m_peripherals_turn == 1) {
-    leftTurn = true;
-  } else {
-    leftTurn = false;
-  }
-
-  
+  backrunningLights = (g_vehicle.m_peripherals_backrunninglights == 1);
+  brakeLights       = (g_vehicle.m_peripherals_brakelights == 1);
+  hazard            = (g_vehicle.m_peripherals_hazard == 1);
+  rightTurn         = (g_vehicle.m_peripherals_turn == 2);
+  leftTurn          = (g_vehicle.m_peripherals_turn == 1);
 }
 
-
 void printState() {
-  //delay(1000);
   Serial.print("Voltage: ");
   Serial.println(g_vehicle.m_pdb_voltage);
   Serial.print("Current: ");
@@ -215,36 +105,52 @@ void printState() {
   Serial.println(g_vehicle.m_throttle_average);
   Serial.print("Throttle Raw: ");
   Serial.println(g_vehicle.m_throttle_raw);
-  
 }
 
 void loop() {
-  // TODO: rest of device
-  server.handleClient();
+  RemoteXY_Handler();
   readStates();
 
-  if(hazard || leftTurn){
+  if (hazard || leftTurn) {
     digitalWrite(HL, HIGH);
   } else {
     digitalWrite(HL, LOW);
   }
 
-  if(hazard || rightTurn){
+  if (hazard || rightTurn) {
     digitalWrite(HR, HIGH);
   } else {
     digitalWrite(HR, LOW);
   }
 
- 
-  if(brakeLights) {
+  if (brakeLights) {
     analogWrite(RL, 255);
-  } else if (backrunningLights){
+  } else if (backrunningLights) {
     analogWrite(RL, 50);
   } else {
-    analogWrite(RL,0);
+    analogWrite(RL, 0);
   }
 
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;
 
-  //printState();
+    float spd = (3.14 * g_vehicle.m_motor_rpm * 0.58 * 60) / 1000.0;
 
+    RemoteXY.speed_display = spd;
+    RemoteXY.rpm_display   = g_vehicle.m_motor_rpm;
+
+    RemoteXY.brake  = brakeLights ? 1 : 0;
+    RemoteXY.led_01 = backrunningLights ? 1 : 0;
+    RemoteXY.led_02 = hazard ? 1 : 0;
+    RemoteXY.led_03 = leftTurn ? 1 : 0;
+    RemoteXY.led_04 = rightTurn ? 1 : 0;
+
+    RemoteXY.speed        = (int16_t)spd;
+    RemoteXY.throttle_avg = g_vehicle.m_throttle_average;
+    RemoteXY.throttle_raw = g_vehicle.m_throttle_raw;
+    RemoteXY.value_01     = g_vehicle.m_motor_rpm;
+    RemoteXY.pdb_voltage  = g_vehicle.m_pdb_voltage;
+    RemoteXY.pdb_current  = g_vehicle.m_pdb_current;
+  }
 }
