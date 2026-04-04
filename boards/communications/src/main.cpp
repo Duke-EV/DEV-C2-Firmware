@@ -69,7 +69,8 @@ void handleRoot() {
     <span id="backrun">Back Running</span> &nbsp;
     <span id="hazard">Hazard</span> &nbsp;
     <span id="left">Left Turn</span> &nbsp;
-    <span id="right">Right Turn</span>
+    <span id="right">Right Turn</span> &nbsp;
+    <span id="enable">Motor Enable</span>
   </div>
   <script>
     function update() {
@@ -79,7 +80,7 @@ void handleRoot() {
         document.getElementById('rpm').textContent          = d.rpm;
         document.getElementById('throttle_avg').textContent = d.throttle_avg;
         document.getElementById('throttle_raw').textContent = d.throttle_raw;
-        ['brake','backrun','hazard','left','right'].forEach(k => {
+        ['brake','backrun','hazard','left','right' ,'enable'].forEach(k => {
           const el = document.getElementById(k);
           el.className = d[k] ? 'on' : 'off';
         });
@@ -96,8 +97,8 @@ void handleRoot() {
 
 void handleGet() {
   String json = "{";
-  json += "\"voltage\":"      + String(g_vehicle.m_pdb_voltage)      + ",";
-  json += "\"current\":"      + String(g_vehicle.m_pdb_current)      + ",";
+  json += "\"voltage\":"      + String(g_vehicle.m_pdb_voltage/1000.0)      + ",";
+  json += "\"current\":"      + String(g_vehicle.m_pdb_current/1000.0)      + ",";
   json += "\"rpm\":"          + String(g_vehicle.m_motor_rpm)         + ",";
   json += "\"throttle_avg\":" + String(g_vehicle.m_throttle_average) + ",";
   json += "\"throttle_raw\":" + String(g_vehicle.m_throttle_raw)     + ",";
@@ -105,7 +106,9 @@ void handleGet() {
   json += "\"backrun\":"      + String(backrunningLights ? "true" : "false") + ",";
   json += "\"hazard\":"       + String(hazard ? "true" : "false")            + ",";
   json += "\"left\":"         + String(leftTurn ? "true" : "false")          + ",";
-  json += "\"right\":"        + String(rightTurn ? "true" : "false")         + "}";
+  json += "\"right\":"        + String(rightTurn ? "true" : "false")         + ",";
+  json += "\"enable\":"        + String(g_vehicle.m_pdb_motor_enabled ? "true" : "false")         + "}";
+  
   server.send(200, "application/json", json);
 }
 
@@ -217,19 +220,27 @@ void loop() {
 
   if(hazard || leftTurn){
     digitalWrite(HL, HIGH);
+  } else {
+    digitalWrite(HL, LOW);
   }
 
   if(hazard || rightTurn){
     digitalWrite(HR, HIGH);
+  } else {
+    digitalWrite(HR, LOW);
   }
 
   if(backrunningLights) {
     analogWrite(RL,50);
-  } 
+  } else {
+    analogWrite(RL,0);
+  }
 
   if(brakeLights) {
     analogWrite(RL, 255);
-  } 
+  } else {
+    analogWrite(RL, 0);
+  }
 
   //printState();
 
