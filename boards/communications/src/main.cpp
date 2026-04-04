@@ -5,7 +5,7 @@
 #define REMOTEXY_MODE__ESP32CORE_BLE
 #include <BLEDevice.h>
 
-#define REMOTEXY_BLUETOOTH_NAME "DEV"
+#define REMOTEXY_BLUETOOTH_NAME "DEV-Raw"
 
 #include <RemoteXY.h>
 
