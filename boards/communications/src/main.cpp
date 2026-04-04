@@ -1,12 +1,12 @@
 #include <Arduino.h>
 #include <vehicle.hpp>
+#include <SD.h>
 #include <Ticker.h>
 
 #define REMOTEXY_MODE__ESP32CORE_BLE
 #include <BLEDevice.h>
 
 #define REMOTEXY_BLUETOOTH_NAME "DEV-Raw"
-
 #include <RemoteXY.h>
 
 #pragma pack(push, 1)  
@@ -33,6 +33,7 @@ const long interval = 500;
 #define RL 22
 #define HL 16
 #define HR 17
+#define SD_CARD_SLOT 5
 
 #ifndef LED_BUILTIN
 #define LED_BUILTIN 2
@@ -45,6 +46,24 @@ void send_all(void *args) {
   }
 }
 
+void write_to_sd(void *args) {
+  while(true) {
+    dataFile.print(millis());
+    dataFile.print(",");
+    dataFile.print(g_vehicle.m_motor_rpm);
+    dataFile.print(",");
+    dataFile.print(g_vehicle.m_pdb_current);
+    dataFile.print(",");
+    dataFile.print(g_vehicle.m_throttle_average);
+    dataFile.print(",");
+    dataFile.println(g_vehicle.m_throttle_raw);  // println only on the last one
+
+    dataFile.flush();
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
+}
+
+File dataFile;
 bool hazard = false;
 bool leftTurn = false;
 bool rightTurn = false;
@@ -53,11 +72,37 @@ bool brakeLights = false;
 
 void setup() {
   RemoteXY_Init();
+  SD.begin(SD_CARD_SLOT);
 
   g_vehicle.init_network(DevBoard::COMMUNICATIONS);
   xTaskCreate(send_all, "Sending", 4096, nullptr, 5, nullptr);
 
   Serial.begin(115200);
+
+  int count = 0;
+  File countFile = SD.open("count.txt", FILE_READ);
+  if (countFile) {
+    count = countFile.parseInt();
+    countFile.close();
+  }
+
+  // Increment and save it back
+  count++;
+  SD.remove("count.txt");
+  countFile = SD.open("count.txt", FILE_WRITE);
+  countFile.println(count);
+  countFile.close();
+
+  char filename[16];
+  snprintf(filename, 16, "log%d.csv", count);
+
+  dataFile = SD.open(filename, FILE_WRITE);
+  Serial.print("Logging to: ");
+  Serial.println(filename);
+
+  dataFile.println("timestamp_ms,rpm,current,throttle_avg,throttle_raw");
+
+  xTaskCreate(write_to_sd, "Writing to SD", 4096, nullptr, 5, nullptr);
 
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(HR, OUTPUT);
