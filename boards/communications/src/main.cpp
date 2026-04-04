@@ -18,6 +18,8 @@
 const char *ssid = "DukeOpen";
 const char *password = "";
 WebServer server(80);
+IPAddress local_IP(192, 168, 1, 184);
+IPAddress gateway(192, 168, 1, 1);
 
 
 void send_all(void *args) {
@@ -61,6 +63,7 @@ void handleRoot() {
   <div class="card"><span class="label">Voltage</span><br><span class="value" id="voltage">--</span> V</div>
   <div class="card"><span class="label">Current</span><br><span class="value" id="current">--</span> A</div>
   <div class="card"><span class="label">Motor RPM</span><br><span class="value" id="rpm">--</span></div>
+  <div class="card"><span class="label">Car Speed</span><br><span class="value" id="rpm">--</span>km/hr</div>
   <div class="card"><span class="label">Throttle Avg</span><br><span class="value" id="throttle_avg">--</span></div>
   <div class="card"><span class="label">Throttle Raw</span><br><span class="value" id="throttle_raw">--</span></div>
   <div class="card">
@@ -78,6 +81,7 @@ void handleRoot() {
         document.getElementById('voltage').textContent      = d.voltage;
         document.getElementById('current').textContent      = d.current;
         document.getElementById('rpm').textContent          = d.rpm;
+        document.getElementById('speed').textContent          = d.speed;
         document.getElementById('throttle_avg').textContent = d.throttle_avg;
         document.getElementById('throttle_raw').textContent = d.throttle_raw;
         ['brake','backrun','hazard','left','right' ,'enable'].forEach(k => {
@@ -100,6 +104,7 @@ void handleGet() {
   json += "\"voltage\":"      + String(g_vehicle.m_pdb_voltage/1000.0)      + ",";
   json += "\"current\":"      + String(g_vehicle.m_pdb_current/1000.0)      + ",";
   json += "\"rpm\":"          + String(g_vehicle.m_motor_rpm)         + ",";
+  json += "\"speed\":"        + String((3.14 * g_vehicle.m_motor_rpm * 0.58 * 60)/1000)         + ",";
   json += "\"throttle_avg\":" + String(g_vehicle.m_throttle_average) + ",";
   json += "\"throttle_raw\":" + String(g_vehicle.m_throttle_raw)     + ",";
   json += "\"brake\":"        + String(brakeLights ? "true" : "false")      + ",";
@@ -230,17 +235,15 @@ void loop() {
     digitalWrite(HR, LOW);
   }
 
-  if(backrunningLights) {
-    analogWrite(RL,50);
+ 
+  if(brakeLights) {
+    analogWrite(RL, 255);
+  } else if (backrunningLights){
+    analogWrite(RL, 50);
   } else {
     analogWrite(RL,0);
   }
 
-  if(brakeLights) {
-    analogWrite(RL, 255);
-  } else {
-    analogWrite(RL, 0);
-  }
 
   //printState();
 
