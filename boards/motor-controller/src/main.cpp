@@ -73,6 +73,7 @@ void setup() {
   delay(1000);
   digitalWriteFast(LED_PIN, LOW);
   initRPMCounter();
+  //identifyHalls();
 }
 
 void loop() {
@@ -81,7 +82,7 @@ void loop() {
     throttle = 0;
     digitalWriteFast(LED_PIN, LOW);
   } else{
-    digitalWriteFast(LED_PIN, HIGH);
+    analogWrite(LED_PIN, throttle);
   }
   for(uint8_t i = 0; i < 200; i++)
   {  
