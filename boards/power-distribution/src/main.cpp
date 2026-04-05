@@ -3,21 +3,22 @@
 // Sends: Heartbeat (power system monitoring in future)
 // Receives: Emergency stop commands
 
-#define PDB_BOARD  // Power Distribution Board
+#define PDB_BOARD // Power Distribution Board
 
 #include <Arduino.h>
 
 #include <vehicle.hpp>
 
 IntervalTimer timer;
-void send_all_wrapper() {
+void send_all_wrapper()
+{
   g_vehicle.send_all();
 }
 
 // PDB state (placeholder for future power monitoring)
 bool powerSystemOk = true;
 
-// LED setup 
+// LED setup
 const int LED = 13;
 bool ledState = false;
 
@@ -34,11 +35,19 @@ uint16_t current_read_mA;
 uint16_t vout_read_mV;
 uint16_t vout_scaled_mV;
 
+// Define filter size (e.g., average of last 10 readings)
+#define FILTER_SIZE 10
 
-void setup() {
+// Global or static arrays to store history
+int current_history[FILTER_SIZE] = {0};
+int vout_history[FILTER_SIZE] = {0};
+int filter_idx = 0;
+
+void setup()
+{
   Serial.begin(115200);
   delay(2000);
-  
+
   Serial.println("========================================");
   Serial.println("  Power Distribution Board Starting");
   Serial.println("========================================");
@@ -52,7 +61,7 @@ void setup() {
   analogReadResolution(12);
   analogReadAveraging(16);
 
-  // LED 
+  // LED
   pinMode(LED, OUTPUT);
   digitalWrite(LED, LOW);
 
@@ -64,37 +73,59 @@ void setup() {
 
   // motor enable signal off
   g_vehicle.m_pdb_motor_enabled = 0;
-  
+
   Serial.println("CAN bus initialized at 500 kbps");
   Serial.println("PDB ready - Power system OK");
   Serial.println();
 }
 
-void loop() {
-  if(timer_ms > 100) {
-    // current sensor read
-    int current_read_raw = analogRead(A9);
-    current_read_mV = (current_read_raw * 3300) / 4095; // Convert to mA, with 3.3V reference and 12-bit ADC
-    // current sensor sensitivity is 40 mV/A = 0.04 mV/mA, 2.5V is 0A, as current draw increases, voltage decreases
-    current_read_mA = (1000 * (2500 - current_read_mV)) / 40; // Convert to mA, with 2.5V offset and 40 mV/A sensitivity
+void loop()
+{
+  if (timer_ms > 100)
+  {
+    // 1. Read Raw Values
+    int raw_current = analogRead(A9);
+    int raw_vout = analogRead(A13);
+
+    // 2. Update Moving Average Buffers
+    current_history[filter_idx] = raw_current;
+    vout_history[filter_idx] = raw_vout;
+    filter_idx = (filter_idx + 1) % FILTER_SIZE;
+
+    // 3. Calculate Averages
+    long current_sum = 0;
+    long vout_sum = 0;
+    for (int i = 0; i < FILTER_SIZE; i++)
+    {
+      current_sum += current_history[i];
+      vout_sum += vout_history[i];
+    }
+    int avg_current_raw = current_sum / FILTER_SIZE;
+    int avg_vout_raw = vout_sum / FILTER_SIZE;
+
+    // 4. Current Calculations (using averaged raw value)
+    current_read_mV = (avg_current_raw * 3300) / 4095;
+    current_read_mA = (1000 * (2500 - current_read_mV)) / 40;
     g_vehicle.m_pdb_current = current_read_mA;
 
-    // vout read
-    int vout_read_raw = analogRead(A13);
-    vout_read_mV = (vout_read_raw * 3300) / 4095; // Convert to mV, with 3.3V reference and 12-bit ADC
-    vout_scaled_mV = (vout_read_mV/10) * 156; // Convert to mV, with reverse voltage divider (divider ratio is 15.666, but since no floats, divide vout_read_mV by 10 and multiply by 156 to get better result)
+    // 5. Voltage Calculations (using averaged raw value)
+    vout_read_mV = (avg_vout_raw * 3300) / 4095;
+    // Optimization: (156/10) is 15.6. To keep precision without floats:
+    vout_scaled_mV = (vout_read_mV * 156) / 10;
     g_vehicle.m_pdb_voltage = vout_scaled_mV;
 
-    timer_ms = 0; // reset timer
+    timer_ms = 0;
   }
-  if(precharge_timer_ms > 2000 && vout_scaled_mV > 45000) {
+  if (precharge_timer_ms > 2000 && vout_scaled_mV > 45000)
+  {
     digitalWrite(LED, HIGH);
     digitalWrite(relay1, HIGH);
-    
-    if(!g_vehicle.m_pdb_motor_enabled) {
+
+    if (!g_vehicle.m_pdb_motor_enabled)
+    {
       g_vehicle.m_pdb_motor_enabled = 1;
     }
   }
 }
 
-//m_motor_enable
+// m_motor_enable

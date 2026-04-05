@@ -120,6 +120,12 @@ void loop() {
 
     if (scaled_throttle_output > throttle_cap) {
       scaled_throttle_output = throttle_cap;
+      Serial.println("throttle capped at: " + String(throttle_cap));
+      Serial.println("current: " + String(g_vehicle.m_pdb_current));
+    }
+
+    if(throttle_cap==0) {
+      throttle_cap = 255; // if the throttle cap is 0, it means that we haven't had enough samples to fill the moving average window, so we should just set the cap to 255 to prevent blocking the throttle. This is a temporary solution and can be improved by having a more robust way of handling the initial state of the system.
     }
 
     smoothed_output = ma.next(scaled_throttle_output);
