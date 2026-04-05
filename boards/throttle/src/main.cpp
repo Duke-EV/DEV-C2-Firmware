@@ -72,7 +72,7 @@ void send_all_wrapper() {
 
 void setup() {
   g_vehicle.init_network(DevBoard::THROTTLE);
-  timer.begin(send_all_wrapper, 100000);
+  timer.begin(send_all_wrapper, 10000); //100Hz
 
   //pinMode(ENABLE, INPUT);
   pinMode(SIGNALIN, INPUT);
@@ -130,7 +130,7 @@ void loop() {
 
     smoothed_output = ma.next(scaled_throttle_output);
 
-    delay(10);
+    delay(4);
 
     g_vehicle.m_throttle_raw = (uint16_t) signal; // raw throttle value
 
