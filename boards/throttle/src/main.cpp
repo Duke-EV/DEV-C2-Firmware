@@ -20,7 +20,7 @@ const int SIGNALIN = 24; // signal in (from 0 to ~4.8*(3/5)=2.88v)
 
 const int BAUD = 9600;
 
-int CURRENT_CAP = 17000;
+int CURRENT_CAP = 1800;
 int CURRENT_HARD_CAP = 19800; // if current is above this value, do a hard reset by rapidly deacceleration the motor and resetting the moving average. This is to prevent damage to the hardware in case of a fault. The value was chosen based on testing and is above the normal operating current of the system, but below the level that caused damage during testing.
 
 const int ENABLE = 6;
@@ -104,24 +104,29 @@ void loop() {
     }
 
     int nstgbtpo = 7; // num_samples_to_go_back_to_prevent_overshoot, time is value * 10 in ms
-    if (g_vehicle.m_pdb_current >=  CURRENT_CAP && flag == 0) {
-      throttle_cap = ma.samples.size() > nstgbtpo ? ma.samples[ma.samples.size() - nstgbtpo] : 0; // get the throttle value 
+  
+    
+    if (g_vehicle.m_pdb_current >=  CURRENT_CAP && flag == 0) { // if current is above this value, cap the throttle to prevent overshoot. This is to prevent damage to the hardware in case of a fault. The value was chosen based on testing and is above the normal operating current of the system, but below the level that caused damage during testing.
+      throttle_cap = smoothed_output; // get the throttle value 
       flag = 1;
       digitalWrite(LED_BUILTIN, LOW);
     }
 
-    if (g_vehicle.m_pdb_current <  CURRENT_CAP && flag == 1) {
-      flag = 0; // the cap should only be reset on instants where you just exceeded the current cap
+    
+    if (g_vehicle.m_pdb_current <  (int)CURRENT_CAP*0.8 && flag == 1) { // if current is back to a safe level, remove the throttle cap. The value of 0.9 is to prevent oscillation around the threshold.
+      throttle_cap = 255;
+      flag=0;
       digitalWrite(LED_BUILTIN, HIGH);
     }
+    
 
     signal = analogRead(SIGNALIN);
     scaled_throttle_output = std::min({(int)(signal * 3.1 / 2.8) >> 2, 255}); //divide to go from 1024 to 256
 
     if (scaled_throttle_output > throttle_cap) {
       scaled_throttle_output = throttle_cap;
-      Serial.println("throttle capped at: " + String(throttle_cap));
-      Serial.println("current: " + String(g_vehicle.m_pdb_current));
+      //Serial.println("throttle capped at: " + String(throttle_cap));
+      //Serial.println("current: " + String(g_vehicle.m_pdb_current));
     }
 
     if(throttle_cap==0) {
@@ -142,7 +147,10 @@ void loop() {
 
 
     // gradually step up the throttle value until we reach the target, but check for disable throttle 
-
+    Serial.print("Current: " + String(g_vehicle.m_pdb_current));
+    Serial.print(" | Scaled Throttle | : " + String(scaled_throttle_output));
+    Serial.print(" | Sent Throttle | : " + String(smoothed_output));
+    Serial.println(" | Throttle Cap: " + String(throttle_cap));
     g_vehicle.m_throttle_average = (uint16_t) smoothed_output; // moving average, scaled to unit_8 range
        
 }
@@ -158,8 +166,8 @@ void slowDeacceleration() {
   // should be a BLOCKING function
   digitalWrite(LED_BUILTIN, LOW);
   while(g_vehicle.m_throttle_average > 0) {
-    g_vehicle.m_throttle_average = ((g_vehicle.m_throttle_average - 5) > 0) ? (g_vehicle.m_throttle_average-5) : 0;
-    delay(10);
+    g_vehicle.m_throttle_average = ((g_vehicle.m_throttle_average - 1) > 0) ? (g_vehicle.m_throttle_average-1) : 0;
+    delay(2);
   }
   digitalWrite(LED_BUILTIN, HIGH);
 
