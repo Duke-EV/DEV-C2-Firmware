@@ -55,7 +55,7 @@ void setup()
 
   // init CAN stuff
   g_vehicle.init_network(DevBoard::POWER_DISTRIBUTION);
-  timer.begin(send_all_wrapper, 100000); // Send on a 100 ms timer. Update if needed.
+  timer.begin(send_all_wrapper, 10000); //100Hz
 
   // init analog IO
   analogReadResolution(12);
@@ -81,7 +81,7 @@ void setup()
 
 void loop()
 {
-  if (timer_ms > 100)
+  if (timer_ms > 10)
   {
     // 1. Read Raw Values
     int raw_current = analogRead(A9);
