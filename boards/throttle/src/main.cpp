@@ -21,6 +21,7 @@ const int SIGNALIN = 24; // signal in (from 0 to ~4.8*(3/5)=2.88v)
 const int BAUD = 9600;
 
 int CURRENT_CAP = 17000;
+int CURRENT_HARD_CAP = 19800; // if current is above this value, do a hard reset by rapidly deacceleration the motor and resetting the moving average. This is to prevent damage to the hardware in case of a fault. The value was chosen based on testing and is above the normal operating current of the system, but below the level that caused damage during testing.
 
 const int ENABLE = 6;
 int WINDOW_SIZE = 500; // number of windows to do the moving average by. 
@@ -94,7 +95,7 @@ void loop() {
     } 
     */
 
-    if(g_vehicle.m_pdb_current >= 19800) { // if current is this high something is wrong so do a hard reset.
+    if(g_vehicle.m_pdb_current >= CURRENT_HARD_CAP) { // if current is this high something is wrong so do a hard reset.
       slowDeacceleration();
 
       for (int i = 0; i < WINDOW_SIZE; i++){
@@ -106,10 +107,12 @@ void loop() {
     if (g_vehicle.m_pdb_current >=  CURRENT_CAP && flag == 0) {
       throttle_cap = ma.samples.size() > nstgbtpo ? ma.samples[ma.samples.size() - nstgbtpo] : 0; // get the throttle value 
       flag = 1;
+      digitalWrite(LED_BUILTIN, LOW);
     }
 
     if (g_vehicle.m_pdb_current <  CURRENT_CAP && flag == 1) {
       flag = 0; // the cap should only be reset on instants where you just exceeded the current cap
+      digitalWrite(LED_BUILTIN, HIGH);
     }
 
     signal = analogRead(SIGNALIN);
@@ -147,11 +150,11 @@ void disableThrottleISR() {
 void slowDeacceleration() {
   // every 100 ms drop the duty cycle by 50 till it hits 0 
   // should be a BLOCKING function
-
+  digitalWrite(LED_BUILTIN, LOW);
   while(g_vehicle.m_throttle_average > 0) {
-    g_vehicle.m_throttle_average = g_vehicle.m_throttle_average - 50 > 0 ? g_vehicle.m_throttle_average-50 : 0;
-    delay(100);
+    g_vehicle.m_throttle_average = ((g_vehicle.m_throttle_average - 5) > 0) ? (g_vehicle.m_throttle_average-5) : 0;
+    delay(10);
   }
+  digitalWrite(LED_BUILTIN, HIGH);
 
 }
-
