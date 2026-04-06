@@ -42,6 +42,9 @@ int throttle_cap = 255;
 
 int flag = 0; // so that it doesn't keep updating the throttle cap when the current is above 17000
 
+// current prediction
+int current_prev = 0;
+
 //void disableThrottleISR();
 
 struct MovingAverage {
@@ -95,6 +98,10 @@ void loop() {
     } 
     */
 
+    // calculate difference of current over 10ms, want to predict 50 ms into future, used before sending value to ESC
+    int current_diff = g_vehicle.m_pdb_current - current_prev; // change in Amps per 10 ms
+    int predicted_current = current_diff * 5 + g_vehicle.m_pdb_current; // predicted current in 50 ms, test to find good prediction time
+
     if(g_vehicle.m_pdb_current >= CURRENT_HARD_CAP) { // if current is this high something is wrong so do a hard reset.
       slowDeacceleration();
 
@@ -104,9 +111,8 @@ void loop() {
     }
 
     int nstgbtpo = 7; // num_samples_to_go_back_to_prevent_overshoot, time is value * 10 in ms
-  
-    
-    if (g_vehicle.m_pdb_current >=  CURRENT_CAP && flag == 0) { // if current is above this value, cap the throttle to prevent overshoot. This is to prevent damage to the hardware in case of a fault. The value was chosen based on testing and is above the normal operating current of the system, but below the level that caused damage during testing.
+
+    if ((g_vehicle.m_pdb_current >=  CURRENT_CAP) && flag == 0) { // if current is above this value or is projected to be above this value next iteration, cap the throttle to prevent overshoot. This is to prevent damage to the hardware in case of a fault. The value was chosen based on testing and is above the normal operating current of the system, but below the level that caused damage during testing.
       throttle_cap = smoothed_output; // get the throttle value 
       flag = 1;
       digitalWrite(LED_BUILTIN, LOW);
@@ -135,6 +141,11 @@ void loop() {
 
     smoothed_output = ma.next(scaled_throttle_output);
 
+    // decrease input to ESC if predicted current is above the current cap
+    if (predicted_current >= CURRENT_CAP) {
+      smoothed_output = (205 * smoothed_output) >> 8; //  205/256 ≈ 0.8 
+    }
+
     delay(4);
 
     g_vehicle.m_throttle_raw = (uint16_t) signal; // raw throttle value
@@ -152,7 +163,11 @@ void loop() {
     Serial.print(" | Sent Throttle | : " + String(smoothed_output));
     Serial.println(" | Throttle Cap: " + String(throttle_cap));
     g_vehicle.m_throttle_average = (uint16_t) smoothed_output; // moving average, scaled to unit_8 range
-       
+
+    if (current_prev != g_vehicle.m_pdb_current) {
+        current_prev = g_vehicle.m_pdb_current;
+    }
+
 }
 
 // THROTTLE DISABLE LOGIC
