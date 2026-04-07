@@ -24,42 +24,27 @@
 
 // RemoteXY GUI configuration  
 #pragma pack(push, 1)  
-uint8_t const PROGMEM RemoteXY_CONF_PROGMEM[] =   // 358 bytes V19 
-  { 255,0,0,26,0,95,1,19,0,0,0,68,69,86,95,68,105,97,103,0,
-  16,1,200,84,1,1,24,0,129,144,63,24,5,64,6,86,111,108,116,97,
-  103,101,40,86,41,0,67,170,62,28,7,77,31,6,3,129,142,74,24,5,
-  64,6,67,117,114,114,101,110,116,40,65,41,0,67,170,73,28,7,77,31,
-  6,3,129,88,63,17,5,64,6,84,104,114,82,97,119,0,67,107,62,31,
-  7,85,31,6,129,89,74,16,5,64,6,84,104,114,65,118,103,0,67,107,
-  73,31,7,85,31,6,70,33,58,7,7,16,24,6,0,129,13,59,18,4,
-  64,6,77,95,69,110,97,98,108,101,0,70,76,76,7,7,16,24,6,0,
-  129,58,77,15,4,64,6,72,97,122,97,114,100,115,0,129,7,38,0,5,
-  64,6,0,70,33,67,7,7,16,24,6,0,129,23,68,7,4,64,6,76,
-  101,102,116,0,70,76,58,7,7,16,24,6,0,129,62,59,10,4,64,6,
-  82,105,103,104,116,0,70,33,76,7,7,16,24,6,0,129,17,77,15,4,
-  64,6,82,117,110,110,105,110,103,0,70,76,67,7,7,16,24,6,0,129,
-  62,68,11,4,64,6,66,114,97,107,101,0,71,11,0,70,70,56,0,187,
-  8,135,0,0,0,0,0,0,32,66,0,0,32,65,0,0,32,65,0,0,
-  0,64,24,107,112,104,0,71,129,1,68,68,56,0,187,24,135,0,0,0,
-  0,0,0,200,67,0,0,200,66,0,0,160,65,0,0,160,65,24,114,112,
-  109,0,129,79,28,51,10,192,202,68,69,86,66,79,65,82,68,0 };
+uint8_t const PROGMEM RemoteXY_CONF_PROGMEM[] =   // 206 bytes V19 
+  { 255,0,0,16,0,199,0,19,0,0,0,68,69,86,95,68,105,97,103,0,
+  16,2,106,200,200,84,1,1,9,0,129,2,38,53,11,111,45,43,9,64,
+  188,86,111,108,116,97,103,101,40,86,41,0,67,60,38,45,11,161,42,31,
+  13,77,31,6,3,129,2,51,51,11,111,65,42,9,64,188,67,117,114,114,
+  101,110,116,40,65,41,0,67,60,51,45,11,161,64,31,13,77,31,6,3,
+  129,2,90,3,11,7,38,0,5,64,6,0,71,231,254,71,71,1,2,95,
+  95,56,0,187,8,135,0,0,0,0,0,0,32,66,0,0,32,65,0,0,
+  32,65,0,0,0,64,24,107,112,104,0,129,19,50,71,29,110,3,77,15,
+  192,202,68,69,86,66,79,65,82,68,0,129,48,105,71,29,109,25,45,9,
+  64,188,87,97,116,116,97,103,101,40,74,41,0,67,71,83,21,24,161,22,
+  31,13,77,16,203,3 };
   
 // this structure defines all the variables and events of your control interface 
 struct {
 
     // output variables
-  float app_kph;
-  int16_t add_rpm; // -32768 .. +32767
   float app_voltage;
   float app_current;
-  int16_t app_throttleR; // -32768 .. +32767
-  int16_t app_throttleA; // -32768 .. +32767
-  uint8_t app_motorE; // from 0 to 1
-  uint8_t app_hazards; // from 0 to 1
-  uint8_t app_left; // from 0 to 1
-  uint8_t app_right; // from 0 to 1
-  uint8_t app_running; // from 0 to 1
-  uint8_t app_brake; // from 0 to 1
+  float app_kph; // from 0 to 40
+  float app_wattage;
 
     // other variable
   uint8_t connect_flag;  // =1 if wire connected, else =0
@@ -196,13 +181,6 @@ void loop() {
     RemoteXY.app_kph        = (float)spd;
     RemoteXY.app_voltage      = (float)(g_vehicle.m_pdb_voltage/1000.0);
     RemoteXY.app_current      = (float)(g_vehicle.m_pdb_current/1000.0);
-    RemoteXY.app_throttleR = (int16_t)g_vehicle.m_throttle_raw;
-    RemoteXY.app_throttleA = (int16_t)g_vehicle.m_throttle_average;
-    RemoteXY.app_motorE   = (uint8_t)g_vehicle.m_pdb_motor_enabled;
-    RemoteXY.app_hazards   = (uint8_t)hazard;
-    RemoteXY.app_left      = (uint8_t)leftTurn;
-    RemoteXY.app_right     = (uint8_t)rightTurn;
-    RemoteXY.app_running   = (uint8_t)(g_vehicle.m_peripherals_backrunninglights);
-    RemoteXY.app_brake     = (uint8_t)brakeLights;
+    RemoteXY.app_wattage = (float)(g_vehicle.m_pdb_voltage/1000.0) * (float)(g_vehicle.m_pdb_current/1000.0);
   }
 }
