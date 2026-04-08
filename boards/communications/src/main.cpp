@@ -167,7 +167,7 @@ void loop() {
   if (brakeLights) {
     analogWrite(RL, 255);
   } else if (backrunningLights) {
-    analogWrite(RL, 50);
+    analogWrite(RL, 20);
   } else {
     analogWrite(RL, 0);
   }
