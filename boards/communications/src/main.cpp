@@ -2,7 +2,9 @@
 #include <vehicle.hpp>
 #include <SD.h>
 #include <Ticker.h>
-
+#include <esp_now.h>
+#include <WiFi.h>
+#include <BLEDevice.h>
 
 //////////////////////////////////////////////
 //        RemoteXY include library          //
@@ -17,15 +19,9 @@
 #define REMOTEXY_MODE__ESP32CORE_BLE
 
 
-#include <BLEDevice.h>
-
-
 // RemoteXY connection settings
 #define REMOTEXY_BLUETOOTH_NAME "DEV_Vehicle"
 #define REMOTEXY_ACCESS_PASSWORD "DEV4Life"
-
-
-
 
 #include <RemoteXY.h>
 
@@ -151,6 +147,56 @@ struct {
 unsigned long previousMillis = 0;
 const long interval = 500;
 
+// ---- ESP-NOW telemetry ----
+// REPLACE with your receiver ESP32's MAC address
+uint8_t telemetryPeer[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
+typedef struct __attribute__((packed)) vehicle_telemetry {
+  uint32_t timestamp_ms;
+  float    kph;
+  float    rpm;
+  float    voltage;        // V
+  float    current;        // A
+  float    wattage;        // W
+  int16_t  throttle_raw;
+  int16_t  throttle_avg;
+  uint8_t  motor_enabled;
+  uint8_t  hazard;
+  uint8_t  left_turn;
+  uint8_t  right_turn;
+  uint8_t  brake_lights;
+  uint8_t  running_lights;
+} vehicle_telemetry;
+
+vehicle_telemetry g_telemetry;
+esp_now_peer_info_t telemetryPeerInfo;
+
+void OnEspNowSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
+  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "ESP-NOW OK" : "ESP-NOW FAIL");
+}
+
+void espnow_send(void *args) {
+  while (true) {
+    g_telemetry.timestamp_ms   = millis();
+    g_telemetry.rpm            = g_vehicle.m_motor_rpm;
+    g_telemetry.kph            = (3.14f * g_vehicle.m_motor_rpm * 0.58f * 60.0f) / 1000.0f;
+    g_telemetry.voltage        = g_vehicle.m_pdb_voltage / 1000.0f;
+    g_telemetry.current        = g_vehicle.m_pdb_current / 1000.0f;
+    g_telemetry.wattage        = (g_vehicle.m_pdb_voltage * g_vehicle.m_pdb_current) / 1000000.0f;
+    g_telemetry.throttle_raw   = (int16_t)g_vehicle.m_throttle_raw;
+    g_telemetry.throttle_avg   = (int16_t)g_vehicle.m_throttle_average;
+    g_telemetry.motor_enabled  = g_vehicle.m_pdb_motor_enabled;
+    g_telemetry.hazard         = (g_vehicle.m_peripherals_hazard == 1);
+    g_telemetry.left_turn      = (g_vehicle.m_peripherals_turn == 1);
+    g_telemetry.right_turn     = (g_vehicle.m_peripherals_turn == 2);
+    g_telemetry.brake_lights   = (g_vehicle.m_peripherals_brakelights == 1);
+    g_telemetry.running_lights = (g_vehicle.m_peripherals_backrunninglights == 1);
+
+    esp_now_send(telemetryPeer, (uint8_t *)&g_telemetry, sizeof(g_telemetry));
+    vTaskDelay(pdMS_TO_TICKS(100));  // 10 Hz
+  }
+}
+
 
 #define RL 22
 #define HL 16
@@ -200,6 +246,23 @@ bool brakeLights = false;
 
 void setup() {
  RemoteXY_Init();
+
+  WiFi.mode(WIFI_STA);
+  if (esp_now_init() == ESP_OK) {
+    esp_now_register_send_cb(OnEspNowSent);
+    memcpy(telemetryPeerInfo.peer_addr, telemetryPeer, 6);
+    telemetryPeerInfo.channel = 0;
+    telemetryPeerInfo.encrypt = false;
+    if (esp_now_add_peer(&telemetryPeerInfo) == ESP_OK) {
+      xTaskCreate(espnow_send, "ESPNow TX", 4096, nullptr, 4, nullptr);
+      Serial.println("ESP-NOW telemetry started");
+    } else {
+      Serial.println("ESP-NOW: failed to add peer");
+    }
+  } else {
+    Serial.println("ESP-NOW: init failed");
+  }
+
  SD.begin(SD_CARD_SLOT);
 
 
