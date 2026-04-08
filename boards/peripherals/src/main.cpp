@@ -65,6 +65,8 @@ void setup() {
 
   // We'll use the serial monitor to view the sensor output
   Serial.begin(9600);
+
+  digitalWrite(LED_BUILTIN, HIGH);
 }
 
 float measure_distance() {
@@ -93,6 +95,7 @@ float measure_distance() {
   cm = pulse_width / 58.0;
 
   return cm;
+  delay(10);
 }
 
 void readStates() {
@@ -110,13 +113,11 @@ void readStates() {
     g_vehicle.m_peripherals_backrunninglights = 0;
     g_vehicle.m_peripherals_headlights = 0;
   }
-  
-  float cm = measure_distance();
-  if(distances.size() >= 10){
-    distances.pop_front();
+  float brake_readings[5];
+  for(int i = 0; i < 5; i++){
+    brake_readings[i] = measure_distance();
   }
-  distances.push_back(cm);
-  std::deque<float> sorted_distances(distances);
+  std::deque<float> sorted_distances(brake_readings, brake_readings + 5);
   std::sort(sorted_distances.begin(), sorted_distances.end());
   median = sorted_distances[sorted_distances.size() / 2];
 
@@ -158,7 +159,4 @@ void loop() {
   else {
     digitalWrite(HL, LOW);
   }
-
-  // Wait at least 60ms before next measurement
-  delay(60);
 }
