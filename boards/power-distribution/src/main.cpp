@@ -116,14 +116,20 @@ void loop()
 
     timer_ms = 0;
   }
-  if (precharge_timer_ms > 2000 && vout_scaled_mV > 45000)
+  if (precharge_timer_ms > 2000 && vout_scaled_mV > 45000) // will always enter this if statement when in normal running state
   {
-    digitalWrite(LED, HIGH);
     digitalWrite(relay1, HIGH);
 
-    if (!g_vehicle.m_pdb_motor_enabled)
+    // enabling motor conditions 
+    if (g_vehicle.m_peripherals_brakelights || !g_vehicle.m_peripherals_backrunninglights) 
+    {
+      g_vehicle.m_pdb_motor_enabled = 0;
+      digitalWrite(LED, LOW);
+    }
+    else if (!g_vehicle.m_pdb_motor_enabled && g_vehicle.m_peripherals_backrunninglights) // uses back lights switch like ignition/motor enable
     {
       g_vehicle.m_pdb_motor_enabled = 1;
+      digitalWrite(LED, HIGH);
     }
   }
 }
