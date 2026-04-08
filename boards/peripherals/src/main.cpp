@@ -98,9 +98,9 @@ float measure_distance() {
 void readStates() {
   leftTurn = digitalRead(sTurnLeft) == HIGH;
   rightTurn = digitalRead(sTurnRight) == HIGH;
-  hazard = digitalRead(sHazard) == HIGH;
+  hazard = digitalRead(sHazard) == LOW; //switch inverted
 
-  if(digitalRead(sRunning) == HIGH){
+  if(digitalRead(sRunning) == LOW){ //switch inverted
     runningLights = true;
     g_vehicle.m_peripherals_backrunninglights = 1;
     g_vehicle.m_peripherals_headlights = 1;
