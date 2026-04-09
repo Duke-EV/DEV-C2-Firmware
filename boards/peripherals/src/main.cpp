@@ -20,7 +20,7 @@ const int ECHO_PIN = 19;
 const unsigned int MAX_DIST = 400;
 
 float median;
-float brake_dist = 4.4;
+float brake_dist = 4.3;
 
 IntervalTimer timer;
 void send_all_wrapper() {
@@ -91,14 +91,14 @@ void readStates() {
   }
 
   // Calculate Median
-  float brake_readings[5];
-  for(int i = 0; i < 5; i++){
+  float brake_readings[9];
+  for(int i = 0; i < 9; i++){
     brake_readings[i] = measure_distance();
     delay(10); // Give the sensor a moment between pings
   }
   
-  std::sort(brake_readings, brake_readings + 5);
-  median = brake_readings[2]; // The middle value is the median
+  std::sort(brake_readings, brake_readings + 9);
+  median = brake_readings[4]; // The middle value is the median
 
   Serial.println(median);
   g_vehicle.m_peripherals_brakelights = (median < brake_dist);
@@ -108,7 +108,7 @@ void loop() {
   readStates();  
 
   // Turn signal/Hazard flashing logic (1Hz)
-  if(millis() % 2000 >= 1000) { //turn on for 1 second
+  if(millis() % 1000 >= 500) { //turn on for 1 second
     if(hazard){
       digitalWrite(FLH, HIGH);
       digitalWrite(FRH, HIGH);
