@@ -108,7 +108,7 @@ void loop() {
   readStates();  
 
   // Turn signal/Hazard flashing logic (1Hz)
-  if(millis() % 2000 >= 1000) {
+  if(millis() % 2000 >= 1000) { //turn on for 1 second
     if(hazard){
       digitalWrite(FLH, HIGH);
       digitalWrite(FRH, HIGH);
@@ -126,14 +126,12 @@ void loop() {
       g_vehicle.m_peripherals_turn = 2;
     }
   }
-  else {
+  else { //turn off for 1 second
     digitalWrite(FLH, LOW);
     digitalWrite(FRH, LOW);
-    // Only reset values if we aren't mid-blink logic
-    if(!hazard && !leftTurn && !rightTurn) {
-        g_vehicle.m_peripherals_hazard = 0;
-        g_vehicle.m_peripherals_turn = 0;
-    }
+    g_vehicle.m_peripherals_hazard = 0;
+    g_vehicle.m_peripherals_turn = 0;
+    
   }
 
   if(runningLights){
