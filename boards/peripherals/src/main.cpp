@@ -91,14 +91,17 @@ void readStates() {
   }
 
   // Calculate Median
-  float brake_readings[9];
+  std::vector<float> brake_readings;
   for(int i = 0; i < 9; i++){
-    brake_readings[i] = measure_distance();
-    delay(10); // Give the sensor a moment between pings
+    float cm = measure_distance();
+    if(cm > 1.0 && cm < 5.0){ // Only consider valid readings
+      brake_readings.push_back(cm);
+    }
+    delay(50); // Give the sensor a moment between pings
   }
   
-  std::sort(brake_readings, brake_readings + 9);
-  median = brake_readings[4]; // The middle value is the median
+  std::sort(brake_readings.begin(), brake_readings.end());
+  median = brake_readings[brake_readings.size()/2]; // The middle value is the median
 
   Serial.println(median);
   g_vehicle.m_peripherals_brakelights = (median < brake_dist);
