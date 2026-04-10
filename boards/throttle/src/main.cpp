@@ -20,7 +20,7 @@ const int SIGNALIN = 24; // signal in (from 0 to ~4.8*(3/5)=2.88v)
 
 const int BAUD = 9600;
 
-int CURRENT_CAP = 2000; // mV
+int CURRENT_CAP = 15000; // mV
 int CURRENT_HARD_CAP = 18000; // if current is above this value, do a hard reset by rapidly deacceleration the motor and resetting the moving average. This is to prevent damage to the hardware in case of a fault. The value was chosen based on testing and is above the normal operating current of the system, but below the level that caused damage during testing.
 
 const int ENABLE = 6;
@@ -44,7 +44,7 @@ int flag = 0; // so that it doesn't keep updating the throttle cap when the curr
 
 // throttle limiting
 #define POS_STEP_SIZE 0.1
-#define NEG_STEP_SIZE 1
+#define NEG_STEP_SIZE 0.5
 #define SIGNAL_ARRAY_LENGTH 3
 //#define THROTTLE_CAP 230
 int signal_array[SIGNAL_ARRAY_LENGTH];
@@ -151,7 +151,10 @@ void loop() {
 
     g_vehicle.m_throttle_average = (int) esc_throttle_input;
 
-    Serial.println(g_vehicle.m_throttle_average);
+    Serial.print("Current: ");
+    Serial.println(g_vehicle.m_pdb_current/1000.0);
+
+    //Serial.println(g_vehicle.m_throttle_average);
     delay(10);
 }
 
