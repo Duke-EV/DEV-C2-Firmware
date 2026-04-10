@@ -20,7 +20,7 @@ const int ECHO_PIN = 19;
 const unsigned int MAX_DIST = 400;
 
 float median;
-float brake_dist = 4.3;
+float brake_dist = 4.0;
 
 IntervalTimer timer;
 void send_all_wrapper() {
@@ -92,7 +92,7 @@ void readStates() {
 
   // Calculate Median
   std::vector<float> brake_readings;
-  for(int i = 0; i < 9; i++){
+  for(int i = 0; i < 3; i++){
     float cm = measure_distance();
     if(cm > 1.0 && cm < 5.0){ // Only consider valid readings
       brake_readings.push_back(cm);
