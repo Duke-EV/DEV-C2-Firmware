@@ -20,8 +20,8 @@ const int SIGNALIN = 24; // signal in (from 0 to ~4.8*(3/5)=2.88v)
 
 const int BAUD = 9600;
 
-int CURRENT_CAP = 1800;
-int CURRENT_HARD_CAP = 19800; // if current is above this value, do a hard reset by rapidly deacceleration the motor and resetting the moving average. This is to prevent damage to the hardware in case of a fault. The value was chosen based on testing and is above the normal operating current of the system, but below the level that caused damage during testing.
+int CURRENT_CAP = 2000; // mV
+int CURRENT_HARD_CAP = 18000; // if current is above this value, do a hard reset by rapidly deacceleration the motor and resetting the moving average. This is to prevent damage to the hardware in case of a fault. The value was chosen based on testing and is above the normal operating current of the system, but below the level that caused damage during testing.
 
 const int ENABLE = 6;
 int WINDOW_SIZE = 500; // number of windows to do the moving average by. 
@@ -42,31 +42,23 @@ int throttle_cap = 255;
 
 int flag = 0; // so that it doesn't keep updating the throttle cap when the current is above 17000
 
-// current prediction
-int current_prev = 0;
+// throttle limiting
+#define POS_STEP_SIZE 1
+#define NEG_STEP_SIZE 1
+#define SIGNAL_ARRAY_LENGTH 3
+#define THROTTLE_CAP 230
+int signal_array[SIGNAL_ARRAY_LENGTH];
+int esc_throttle_input = 0;
+int delta_throttle = 0;
+int max_signal_idx;
+int min_signal_idx;
+int max_signal;
+int min_signal;
+// last throttle value - in g vehicle
+// if new < old, set trhottle to new
+// if recorded step size > STEP_SIZE, then set the step size to the macro
 
 //void disableThrottleISR();
-
-struct MovingAverage {
-  std::deque<int> samples;
-  unsigned int window;
-  int sum = 0;
-
-  MovingAverage(int w) {
-    window = w;
-  }
-
-  int next (int signal) {
-    if (samples.size() == window) {
-      sum -= samples.front();
-      samples.pop_front();
-    }
-
-    sum+=signal;
-    samples.push_back(signal);
-    return sum / samples.size();
-  }
-};
 
 IntervalTimer timer;
 void send_all_wrapper() {
@@ -86,88 +78,75 @@ void setup() {
   Serial.begin(BAUD);
 }
 
-MovingAverage ma{WINDOW_SIZE};
-
 void loop() {
-    /*
-    if(disable_throttle == true) {
-      signal = 0;
-      scaled_throttle_output = 0;
-      g_vehicle.m_throttle_average = 0;
-      g_vehicle.m_throttle_raw = 0;
-    } 
-    */
-
-    // calculate difference of current over 10ms, want to predict 50 ms into future, used before sending value to ESC
-    int current_diff = g_vehicle.m_pdb_current - current_prev; // change in Amps per 10 ms
-    int predicted_current = current_diff * 5 + g_vehicle.m_pdb_current; // predicted current in 50 ms, test to find good prediction time
-
     if(g_vehicle.m_pdb_current >= CURRENT_HARD_CAP) { // if current is this high something is wrong so do a hard reset.
-      slowDeacceleration();
+      slowDeacceleration();  // blocking, lowers throttle to 0
+    }
 
-      for (int i = 0; i < WINDOW_SIZE; i++){
-        ma.next(0);
+    if ((g_vehicle.m_pdb_current >=  CURRENT_CAP)) { // if current is above this value or is projected to be above this value next iteration, cap the throttle to prevent overshoot. This is to prevent damage to the hardware in case of a fault. The value was chosen based on testing and is above the normal operating current of the system, but below the level that caused damage during testing.
+      // lower throttle by 1
+      esc_throttle_input -= NEG_STEP_SIZE;
+      digitalWrite(LED_BUILTIN, LOW);
+      goto update_esc_input;
+    }
+
+    for(int i = 0; i < SIGNAL_ARRAY_LENGTH; i++) {
+      signal = analogRead(SIGNALIN);
+      int temp = std::min({(int)(signal * 3.1 / 2.8) >> 2, 255}); //divide to go from 1024 to 256
+      signal_array[i] = temp;
+
+      delayMicroseconds(100);
+    }
+
+    // find median value - **TODO: rework so works beyond 3 inputs 
+    max_signal_idx = 0;
+    min_signal_idx = 0;
+    max_signal = 0;
+    min_signal = 500;
+    for (int i = 0; i < SIGNAL_ARRAY_LENGTH; i++) {
+      if (signal_array[i] > max_signal) {
+        max_signal = signal_array[i];
+        max_signal_idx = i;
+      }
+      if (signal_array[i] < min_signal) {
+        min_signal = signal_array[i];
+        min_signal_idx = i;
+      }
+    }
+    for (int i = 0; i < SIGNAL_ARRAY_LENGTH; i++) {
+      if (i != max_signal_idx && i != min_signal_idx) {
+        scaled_throttle_output = signal_array[i];
+        g_vehicle.m_throttle_raw = signal_array[i];
       }
     }
 
-    int nstgbtpo = 7; // num_samples_to_go_back_to_prevent_overshoot, time is value * 10 in ms
-
-    if ((g_vehicle.m_pdb_current >=  CURRENT_CAP) && flag == 0) { // if current is above this value or is projected to be above this value next iteration, cap the throttle to prevent overshoot. This is to prevent damage to the hardware in case of a fault. The value was chosen based on testing and is above the normal operating current of the system, but below the level that caused damage during testing.
-      throttle_cap = smoothed_output; // get the throttle value 
-      flag = 1;
-      digitalWrite(LED_BUILTIN, LOW);
+    if(scaled_throttle_output < 5) {
+      esc_throttle_input = 0;
+      goto update_esc_input;
     }
+      
 
+    delta_throttle = scaled_throttle_output - g_vehicle.m_throttle_average; // m_throttle_average goes to esc
+
+    if (delta_throttle > POS_STEP_SIZE) {
+      esc_throttle_input += POS_STEP_SIZE;
+    } else { // if condition above not met, then scaled_throttle_output is either negative or less than step cap
+      esc_throttle_input = scaled_throttle_output;
+    }
     
-    if (g_vehicle.m_pdb_current <  (int)CURRENT_CAP*0.8 && flag == 1) { // if current is back to a safe level, remove the throttle cap. The value of 0.9 is to prevent oscillation around the threshold.
-      throttle_cap = 255;
-      flag=0;
-      digitalWrite(LED_BUILTIN, HIGH);
+    update_esc_input:
+
+    if (esc_throttle_input <= 0) {
+      esc_throttle_input = 0;
     }
-    
-
-    signal = analogRead(SIGNALIN);
-    scaled_throttle_output = std::min({(int)(signal * 3.1 / 2.8) >> 2, 255}); //divide to go from 1024 to 256
-
-    if (scaled_throttle_output > throttle_cap) {
-      scaled_throttle_output = throttle_cap;
-      //Serial.println("throttle capped at: " + String(throttle_cap));
-      //Serial.println("current: " + String(g_vehicle.m_pdb_current));
+    if (esc_throttle_input >= THROTTLE_CAP) {
+      esc_throttle_input = THROTTLE_CAP;
     }
 
-    if(throttle_cap==0) {
-      throttle_cap = 255; // if the throttle cap is 0, it means that we haven't had enough samples to fill the moving average window, so we should just set the cap to 255 to prevent blocking the throttle. This is a temporary solution and can be improved by having a more robust way of handling the initial state of the system.
-    }
+    g_vehicle.m_throttle_average = esc_throttle_input;
+    // g_vehicle.m_throttle_raw = (uint16_t) signal; // raw throttle value
 
-    smoothed_output = ma.next(scaled_throttle_output);
-
-    // decrease input to ESC if predicted current is above the current cap
-    if (predicted_current >= CURRENT_CAP) {
-      smoothed_output = (205 * smoothed_output) >> 8; //  205/256 ≈ 0.8 
-    }
-
-    delay(4);
-
-    g_vehicle.m_throttle_raw = (uint16_t) signal; // raw throttle value
-
-
-
-    if (scaled_throttle_output < smoothed_output) {
-      smoothed_output = scaled_throttle_output;
-    }
-
-
-    // gradually step up the throttle value until we reach the target, but check for disable throttle 
-    Serial.print("Current: " + String(g_vehicle.m_pdb_current));
-    Serial.print(" | Scaled Throttle | : " + String(scaled_throttle_output));
-    Serial.print(" | Sent Throttle | : " + String(smoothed_output));
-    Serial.println(" | Throttle Cap: " + String(throttle_cap));
-    g_vehicle.m_throttle_average = (uint16_t) smoothed_output; // moving average, scaled to unit_8 range
-
-    if (current_prev != g_vehicle.m_pdb_current) {
-        current_prev = g_vehicle.m_pdb_current;
-    }
-
+    delay(10);
 }
 
 // THROTTLE DISABLE LOGIC
@@ -185,5 +164,7 @@ void slowDeacceleration() {
     delay(2);
   }
   digitalWrite(LED_BUILTIN, HIGH);
+
+  esc_throttle_input = 0;
 
 }
