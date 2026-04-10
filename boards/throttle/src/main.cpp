@@ -35,21 +35,21 @@ int curr_throttle_value = 0;
 
 int signal = 0;
 int scaled_throttle_output = 0;
-int smoothed_output = 0;
+//int smoothed_output = 0;
 void slowDeacceleration();
 
-int throttle_cap = 255;
+int THROTTLE_CAP = 255;
 
 int flag = 0; // so that it doesn't keep updating the throttle cap when the current is above 17000
 
 // throttle limiting
-#define POS_STEP_SIZE 1
+#define POS_STEP_SIZE 0.1
 #define NEG_STEP_SIZE 1
 #define SIGNAL_ARRAY_LENGTH 3
-#define THROTTLE_CAP 230
+//#define THROTTLE_CAP 230
 int signal_array[SIGNAL_ARRAY_LENGTH];
-int esc_throttle_input = 0;
-int delta_throttle = 0;
+float esc_throttle_input = 0;
+float delta_throttle = 0;
 int max_signal_idx;
 int min_signal_idx;
 int max_signal;
@@ -76,6 +76,11 @@ void setup() {
   digitalWrite(LED_BUILTIN, HIGH);
 
   Serial.begin(BAUD);
+
+  // initialize signal array to 0
+  for (int i = 0; i < SIGNAL_ARRAY_LENGTH; i++) {
+    signal_array[i] = 0;
+  }
 }
 
 void loop() {
@@ -103,6 +108,7 @@ void loop() {
     min_signal_idx = 0;
     max_signal = 0;
     min_signal = 500;
+
     for (int i = 0; i < SIGNAL_ARRAY_LENGTH; i++) {
       if (signal_array[i] > max_signal) {
         max_signal = signal_array[i];
@@ -126,7 +132,7 @@ void loop() {
     }
       
 
-    delta_throttle = scaled_throttle_output - g_vehicle.m_throttle_average; // m_throttle_average goes to esc
+    delta_throttle = scaled_throttle_output - esc_throttle_input; // m_throttle_average goes to esc
 
     if (delta_throttle > POS_STEP_SIZE) {
       esc_throttle_input += POS_STEP_SIZE;
@@ -143,9 +149,9 @@ void loop() {
       esc_throttle_input = THROTTLE_CAP;
     }
 
-    g_vehicle.m_throttle_average = esc_throttle_input;
-    // g_vehicle.m_throttle_raw = (uint16_t) signal; // raw throttle value
+    g_vehicle.m_throttle_average = (int) esc_throttle_input;
 
+    Serial.println(g_vehicle.m_throttle_average);
     delay(10);
 }
 
