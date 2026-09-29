@@ -16,12 +16,6 @@ The programmable modules of the DEV. Each directory inside is a PlatformIO proje
 The common library implementing the CANbus messaging specification between all
 boards on the network
 
-TODO: Contributing guide
+## Contributing
 
-TODO: Build guide
-
-TODO: Agents guide
-
-TODO: Programmers guide
-
-TODO: Anything else
+Please see CONTRIBUTING.md to learn more about contributing to this repository.
