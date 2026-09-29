@@ -192,7 +192,9 @@ void espnow_send(void *args) {
     g_telemetry.brake_lights   = (g_vehicle.m_peripherals_brakelights == 1);
     g_telemetry.running_lights = (g_vehicle.m_peripherals_backrunninglights == 1);
 
-    esp_now_send(telemetryPeer, static_cast<uint8_t*>(&g_telemetry), sizeof(g_telemetry));
+    uint8_t payload[sizeof(g_telemetry)];
+    memcpy(payload, &g_telemetry, sizeof(g_telemetry));
+    esp_now_send(telemetryPeer, payload, sizeof(payload));
     vTaskDelay(pdMS_TO_TICKS(100));  // 10 Hz
   }
 }

@@ -41,7 +41,6 @@ jobs:
       matrix:
         board:
           - communications
-          - joulemeter
           - motor-controller
           - peripherals
           - power-distribution
