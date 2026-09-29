@@ -42,7 +42,7 @@ void Vehicle::send_message(uint32_t id, uint8_t len, const uint8_t *data) {
 
   memcpy(frame.data, data, len);
 
-  bool ok = ESP32Can.writeFrame(frame);
+  ESP32Can.writeFrame(frame);
 }
 
 void Vehicle::twai_receive_task(void *args) {
