@@ -1,4 +1,4 @@
-name: Firmware CI
+name: Build and Lint
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
 
 jobs:
   lint:
-    name: Lint C++ code
+    name: Build and Lint
     runs-on: ubuntu-latest
 
     steps:
@@ -32,7 +32,7 @@ jobs:
         run: make lint
 
   build:
-    name: Build board firmware
+    name: Build and Lint
     runs-on: ubuntu-latest
     needs: lint
 
