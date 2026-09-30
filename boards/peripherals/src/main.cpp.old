@@ -1,0 +1,195 @@
+// peripherals_main.cpp
+// Main program for Peripherals Board
+// Sends: Light states (headlights, turn signals, hazards, etc.) to Communications board
+// Receives: Commands from driver controls (future implementation)
+
+#define PERI_BOARD  // Peripherals board
+
+#include <Arduino.h>
+#include "../../Comms/CAN Network/vehicle.hpp"
+#include "../../Comms/CAN Network/flexcan_adapter.hpp"
+
+FlexCANAdapter canAdapter;
+
+// Peripherals state
+struct PeripheralsState {
+  uint8_t left_turn;
+  uint8_t right_turn;
+  uint8_t brakelights;
+  uint8_t hazards;
+  uint8_t back_running_lights;
+  uint8_t seq;
+} periState = {0, 0, 0, 0, 0, 0, 0, 0};
+
+// Digital input pins for switches/buttons
+const int PIN_LEFT_TURN = 3;
+const int PIN_RIGHT_TURN = 4;
+const int PIN_BRAKE = 5;
+const int PIN_HAZARDS = 6;
+
+// Output pins for lights
+const int PIN_HEADLIGHT_OUT = 14;
+const int PIN_LEFT_TURN_OUT = 15;
+const int PIN_RIGHT_TURN_OUT = 16;
+const int PIN_BRAKE_OUT = 17;
+const int PIN_BACK_LIGHT_OUT = 18;
+const int PIN_WINDSHIELD_OUT = 19;
+
+// Timing variables
+unsigned long lastHeartbeat = 0;
+unsigned long lastPeriStatesSend = 0;
+unsigned long lastBlinkToggle = 0;
+bool blinkState = false;
+
+// Message handler
+void handleCanMessage(vehicle::CanId id, const uint8_t* data, uint8_t len) {
+  switch(id) {
+    case vehicle::ID_EMERGENCY:
+      Serial.println("[RX] !!! EMERGENCY STOP !!!");
+      // Turn on hazards in emergency
+      periState.hazards = 1;
+      break;
+      
+    default:
+      break;
+  }
+}
+
+void readInputs() {
+  // Read switch states
+  periState.headlights = digitalRead(PIN_HEADLIGHTS);
+  periState.left_turn = digitalRead(PIN_LEFT_TURN);
+  periState.right_turn = digitalRead(PIN_RIGHT_TURN);
+  periState.brakelights = digitalRead(PIN_BRAKE);
+  periState.hazards = digitalRead(PIN_HAZARDS);
+  periState.windshield = digitalRead(PIN_WINDSHIELD);
+  
+  // Back running lights are on when headlights are on
+  periState.back_running_lights = periState.headlights;
+  
+  // Update atomic storage
+  vehicle::setBackLight(periState.back_running_lights);
+  vehicle::setBackLeftBlinker(periState.left_turn || periState.hazards);
+  vehicle::setBackRightBlinker(periState.right_turn || periState.hazards);
+}
+
+void updateOutputs() {
+  // Update light outputs
+  digitalWrite(PIN_HEADLIGHT_OUT, periState.headlights);
+  digitalWrite(PIN_BRAKE_OUT, periState.brakelights);
+  digitalWrite(PIN_BACK_LIGHT_OUT, periState.back_running_lights);
+  digitalWrite(PIN_WINDSHIELD_OUT, periState.windshield);
+  
+  // Turn signals blink at ~2Hz (500ms period)
+  if (periState.left_turn || periState.hazards) {
+    digitalWrite(PIN_LEFT_TURN_OUT, blinkState);
+  } else {
+    digitalWrite(PIN_LEFT_TURN_OUT, LOW);
+  }
+  
+  if (periState.right_turn || periState.hazards) {
+    digitalWrite(PIN_RIGHT_TURN_OUT, blinkState);
+  } else {
+    digitalWrite(PIN_RIGHT_TURN_OUT, LOW);
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(2000);
+  
+  Serial.println("========================================");
+  Serial.println("    Peripherals Board Starting");
+  Serial.println("========================================");
+  Serial.println();
+  
+  // Initialize CAN bus
+  vehicle::init(&canAdapter);
+  
+  // Register message handler
+  vehicle::registerRxHandler(handleCanMessage);
+  
+  // Configure input pins
+  pinMode(PIN_HEADLIGHTS, INPUT_PULLUP);
+  pinMode(PIN_LEFT_TURN, INPUT_PULLUP);
+  pinMode(PIN_RIGHT_TURN, INPUT_PULLUP);
+  pinMode(PIN_BRAKE, INPUT_PULLUP);
+  pinMode(PIN_HAZARDS, INPUT_PULLUP);
+  pinMode(PIN_WINDSHIELD, INPUT_PULLUP);
+  
+  // Configure output pins
+  pinMode(PIN_HEADLIGHT_OUT, OUTPUT);
+  pinMode(PIN_LEFT_TURN_OUT, OUTPUT);
+  pinMode(PIN_RIGHT_TURN_OUT, OUTPUT);
+  pinMode(PIN_BRAKE_OUT, OUTPUT);
+  pinMode(PIN_BACK_LIGHT_OUT, OUTPUT);
+  pinMode(PIN_WINDSHIELD_OUT, OUTPUT);
+  
+  Serial.println("CAN bus initialized at 500 kbps");
+  Serial.println("Peripherals ready");
+  Serial.println("Monitoring switches...");
+  Serial.println();
+  
+  // Set initial state
+  vehicle::setBackLight(0);
+  vehicle::setBackLeftBlinker(0);
+  vehicle::setBackRightBlinker(0);
+}
+
+void loop() {
+  unsigned long now = millis();
+  
+  // CRITICAL: Process FlexCAN events
+  canAdapter.events();
+  
+  // CRITICAL: Process received messages
+  vehicle::processRxQueue();
+  
+  // Read input switches
+  readInputs();
+  
+  // Toggle blink state every 500ms
+  if (now - lastBlinkToggle >= 500) {
+    lastBlinkToggle = now;
+    blinkState = !blinkState;
+  }
+  
+  // Update output lights
+  updateOutputs();
+  
+  // Send heartbeat every 100ms
+  if (now - lastHeartbeat >= vehicle::HEARTBEAT_PERIOD_MS) {
+    lastHeartbeat = now;
+    vehicle::sendHeartbeat(vehicle::ID_PERI);
+  }
+  
+  // Send peripheral state to Comms board every 100ms
+  if (now - lastPeriStatesSend >= 100) {
+    lastPeriStatesSend = now;
+    periState.seq++;
+    
+    if (vehicle::sendPeriState(periState.seq)) {
+      // Success
+    } else {
+      Serial.println("[TX ERROR] Failed to send peripheral state");
+    }
+  }
+  
+  // Debug print every 2 seconds
+  static unsigned long lastPrint = 0;
+  if (now - lastPrint >= 2000) {
+    lastPrint = now;
+    Serial.print("Lights: Head=");
+    Serial.print(periState.headlights);
+    Serial.print(" L=");
+    Serial.print(periState.left_turn);
+    Serial.print(" R=");
+    Serial.print(periState.right_turn);
+    Serial.print(" Brake=");
+    Serial.print(periState.brakelights);
+    Serial.print(" Hazard=");
+    Serial.print(periState.hazards);
+    Serial.print(" Wiper=");
+    Serial.println(periState.windshield);
+  }
+}

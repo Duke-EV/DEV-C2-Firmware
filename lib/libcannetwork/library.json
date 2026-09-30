@@ -1,0 +1,43 @@
+{
+  "name": "libcannetwork",
+  "version": "0.1.0",
+  "description": "CAN Communcations for DEV",
+  "keywords": ["can"],
+  "frameworks": "arduino",
+  "authors": [
+    {
+      "name": "Jason Wilkinson"
+    },
+    {
+      "name": "Anya Krislav"
+    },
+    {
+      "name": "Jane Shin"
+    },
+    {
+      "name": "Maria Jiao"
+    },
+    {
+      "name": "Roudy Mohamed"
+    },
+    {
+      "name": "Dave Zheng"
+    },
+    {
+      "name": "Anthony Zhang"
+    }
+  ],
+  "platforms": ["espressif32","teensy"],
+  "dependencies": [
+    {
+      "name":"ESP32-TWAI-CAN",
+      "source":"https://github.com/handmade0octopus/ESP32-TWAI-CAN",
+      "platforms":["espressif32"]
+    },
+    {
+      "name":"FlexCAN_T4",
+      "source":"https://github.com/tonton81/FlexCAN_T4",
+      "platforms": ["teensy"]
+    }
+  ]
+}

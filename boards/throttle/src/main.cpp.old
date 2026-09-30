@@ -1,0 +1,137 @@
+#define THR_BOARD  // Throttle board identity for vehicle.hpp
+
+#include <Arduino.h>
+#include "../../Comms/CAN Network/vehicle.hpp"
+#include "../../Comms/CAN Network/flexcan_adapter.hpp"
+
+FlexCANAdapter canAdapter;
+
+// Throttle state
+static uint16_t throttleValue = 0;   // 0..1000
+static uint8_t  throttleSeq   = 0;
+
+// Input
+static const int THROTTLE_PIN = A0;
+
+// Timing
+static unsigned long lastHeartbeat    = 0;
+static unsigned long lastThrottleSend = 0;
+static unsigned long lastPrint        = 0;
+
+// Receive handler (matches vehicle::RxHandler signature exactly)
+static void handleCanMessage(vehicle::CanId id, const uint8_t* data, uint8_t len) {
+  switch (id) {
+    case vehicle::ID_MOTOR_TELEMETRY: {
+      if (len >= sizeof(vehicle::MotorTelemetry)) {
+        vehicle::MotorTelemetry mt;
+        memcpy(&mt, data, sizeof(mt));
+
+        // Optional: basic feedback warning
+        if (mt.rpm > 4800) {
+          Serial.println("[RX] Motor RPM high (telemetry) - consider limiting throttle");
+        }
+      }
+      break;
+    }
+
+    case vehicle::ID_MOTOR:
+      // Motor heartbeat received (optional to log)
+      // Serial.println("[RX] Motor heartbeat");
+      break;
+
+    case vehicle::ID_EMERGENCY:
+      Serial.println("[RX] !!! EMERGENCY STOP !!! Setting throttle to 0");
+      throttleValue = 0;
+      vehicle::setThrottleRaw(0);
+
+      // Immediately send a zero throttle command (best practice)
+      throttleSeq++;
+      if (!vehicle::sendThrottle(throttleSeq)) {
+        Serial.println("[TX ERROR] Failed to send immediate zero throttle");
+      }
+      break;
+
+    default:
+      break;
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(1000);
+
+  Serial.println("           Throttle Board");
+  Serial.println("   TX: HB 0x400, THR 0x410 (len=4)");
+  // Init CAN + vehicle layer
+  vehicle::init(&canAdapter);
+
+  // Register RX handler
+  vehicle::registerRxHandler(handleCanMessage);
+
+  pinMode(THROTTLE_PIN, INPUT);
+
+  // Initialize throttle shared state
+  vehicle::setThrottleRaw(0);
+
+  Serial.println("CAN initialized @ 500 kbps");
+  Serial.println("Reading throttle on A0...");
+}
+
+void loop() {
+  const unsigned long now = millis();
+
+  // Service CAN driver + vehicle queue
+  canAdapter.events();
+  vehicle::processRxQueue();
+
+  // Read throttle analog and map to 0..1000
+  int adcValue = analogRead(THROTTLE_PIN);
+  uint16_t mapped = (uint16_t)map(adcValue, 0, 1023, 0, 1000);
+  mapped = (uint16_t)constrain(mapped, 0, 1000);
+
+  // Simple hysteresis to reduce jitter
+  static uint16_t lastStable = 0;
+  if ((uint16_t)abs((int)mapped - (int)lastStable) < 5) {
+    throttleValue = lastStable;
+  } else {
+    throttleValue = mapped;
+    lastStable = mapped;
+  }
+
+  // Update vehicle-owned atomic
+  vehicle::setThrottleRaw(throttleValue);
+
+  // Heartbeat at 10 Hz
+  if (now - lastHeartbeat >= vehicle::HEARTBEAT_PERIOD_MS) {
+    lastHeartbeat = now;
+    vehicle::sendHeartbeat(vehicle::ID_THR);
+  }
+
+  // Throttle command at 50 Hz (every 20 ms)
+  if (now - lastThrottleSend >= 20) {
+    lastThrottleSend = now;
+    throttleSeq++;
+
+    // Optional: print the exact packed bytes occasionally (comment out once verified)
+    // vehicle::ThrottleMsg dbg{ throttleValue, 0, throttleSeq };
+    // const uint8_t* b = reinterpret_cast<const uint8_t*>(&dbg);
+    // Serial.printf("[TX DBG] 0x%03X len=%u data=%02X %02X %02X %02X\n",
+    //               (unsigned)vehicle::ID_THR_TO_MC, (unsigned)sizeof(dbg),
+    //               b[0], b[1], b[2], b[3]);
+
+    if (!vehicle::sendThrottle(throttleSeq)) {
+      Serial.println("[TX ERROR] Failed to send throttle command");
+    }
+  }
+
+  // Print once per second
+  if (now - lastPrint >= 1000) {
+    lastPrint = now;
+    Serial.print("[STATE] Throttle ");
+    Serial.print(throttleValue);
+    Serial.print("/1000 (");
+    Serial.print((throttleValue * 100) / 1000);
+    Serial.print("%) | ADC ");
+    Serial.println(adcValue);
+  }
+}
