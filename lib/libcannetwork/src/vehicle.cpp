@@ -118,126 +118,127 @@ void Vehicle::send_message(uint32_t id, uint8_t len, const uint8_t *data) {
 #endif // defined(CORE_TEENSY)
 
 void Vehicle::send_all() {
-  uint8_t data[8];
-  uint8_t heartbeat[8];
-  heartbeat[0] = 1;
   switch (m_board) {
-  case PERIPHERALS:
-    data[0] = g_vehicle.m_peripherals_windshield;
-    data[1] = g_vehicle.m_peripherals_backrunninglights;
-    data[2] = g_vehicle.m_peripherals_turn;
-    data[3] = g_vehicle.m_peripherals_headlights;
-    data[4] = g_vehicle.m_peripherals_brakelights;
-    data[5] = g_vehicle.m_peripherals_hazard;
+  case PERIPHERALS: {
+    MsgPeripherals payload = {};
+    payload.heartbeat = 1;
+    payload.windshield = g_vehicle.m_peripherals_windshield;
+    payload.backrunninglights = g_vehicle.m_peripherals_backrunninglights;
+    payload.turn = g_vehicle.m_peripherals_turn;
+    payload.headlights = g_vehicle.m_peripherals_headlights;
+    payload.brakelights = g_vehicle.m_peripherals_brakelights;
+    payload.hazard = g_vehicle.m_peripherals_hazard;
 
-    g_vehicle.send_message(0x100, 8, data);
-    g_vehicle.send_message(0x101, 8, heartbeat);
+    g_vehicle.send_message(0x100, sizeof(payload), (const uint8_t*)&payload);
     break;
+  }
   
-  case POWER_DISTRIBUTION:
-    data[0] = (g_vehicle.m_pdb_current >> 8) & 0xFF;
-    data[1] = g_vehicle.m_pdb_current & 0xFF;
-    data[2] = (g_vehicle.m_pdb_voltage >> 8) & 0xFF;
-    data[3] = g_vehicle.m_pdb_voltage & 0xFF;
-    data[4] = g_vehicle.m_pdb_motor_enabled;
+  case POWER_DISTRIBUTION: {
+    MsgPDB payload = {};
+    payload.heartbeat = 1;
+    payload.current = g_vehicle.m_pdb_current;
+    payload.voltage = g_vehicle.m_pdb_voltage;
+    payload.motor_enabled = g_vehicle.m_pdb_motor_enabled;
     
-    g_vehicle.send_message(0x200, 8, data);
-    g_vehicle.send_message(0x201, 8, heartbeat);
+    g_vehicle.send_message(0x200, sizeof(payload), (const uint8_t*)&payload);
     break;
+  }
 
-  case MOTOR_CONTROLLER:
-    data[0] = (g_vehicle.m_motor_rpm >> 24) & 0xFF;
-    data[1] = (g_vehicle.m_motor_rpm >> 16) & 0xFF;
-    data[2] = (g_vehicle.m_motor_rpm >> 8) & 0xFF;
-    data[3] = g_vehicle.m_motor_rpm & 0xFF;
+  case MOTOR_CONTROLLER: {
+    MsgMotor payload = {};
+    payload.heartbeat = 1;
+    payload.rpm = g_vehicle.m_motor_rpm;
 
-    g_vehicle.send_message(0x300, 8, data);
-    g_vehicle.send_message(0x301, 8, heartbeat);
+    g_vehicle.send_message(0x300, sizeof(payload), (const uint8_t*)&payload);
     break;
+  }
     
-  case THROTTLE:
-    data[0] = (g_vehicle.m_throttle_raw >> 8) & 0xFF;
-    data[1] = g_vehicle.m_throttle_raw & 0xFF;
-    data[2] = (g_vehicle.m_throttle_average >> 8) & 0xFF;
-    data[3] = g_vehicle.m_throttle_average & 0xFF;
+  case THROTTLE: {
+    MsgThrottle payload = {};
+    payload.heartbeat = 1;
+    payload.raw = g_vehicle.m_throttle_raw;
+    payload.average = g_vehicle.m_throttle_average;
 
-    g_vehicle.send_message(0x400, 8, data);
-    g_vehicle.send_message(0x401, 8, heartbeat);
+    g_vehicle.send_message(0x400, sizeof(payload), (const uint8_t*)&payload);
     break;
+  }
     
-  case JOULEMETER:
-    data[0] = (g_vehicle.m_joulemeter_current >> 8) & 0xFF;
-    data[1] = g_vehicle.m_joulemeter_current & 0xFF;
-    data[2] = (g_vehicle.m_joulemeter_voltage >> 8) & 0xFF;
-    data[3] = g_vehicle.m_joulemeter_voltage & 0xFF;
-    data[4] = (g_vehicle.m_joulemeter_energy >> 24) & 0xFF;
-    data[5] = (g_vehicle.m_joulemeter_energy >> 16) & 0xFF;
-    data[6] = (g_vehicle.m_joulemeter_energy >> 8) & 0xFF;
-    data[7] = g_vehicle.m_joulemeter_energy & 0xFF;
+  case JOULEMETER: {
+    MsgJoulemeter payload = {};
+    payload.heartbeat = 1;
+    payload.current = g_vehicle.m_joulemeter_current;
+    payload.voltage = g_vehicle.m_joulemeter_voltage;
+    payload.energy = g_vehicle.m_joulemeter_energy;
     
-    g_vehicle.send_message(0x500, 8, data);
-    g_vehicle.send_message(0x501, 8, heartbeat);
+    g_vehicle.send_message(0x500, sizeof(payload), (const uint8_t*)&payload);
     break;
+  }
 
   case COMMUNICATIONS:
-    g_vehicle.send_message(0x600, 8, heartbeat);
+  case TEST_BOARD: {
+    uint8_t heartbeat = 1;
+    uint32_t id = (m_board == COMMUNICATIONS) ? 0x600 : 0x700;
+    g_vehicle.send_message(id, 1, &heartbeat);
     break;
-
-  case TEST_BOARD:
-    g_vehicle.send_message(0x700, 8, heartbeat);
-    break;
-
+  }
+  
   default:
-    // should never reach here
     break;
   }
 }
 
 void Vehicle::on_receive(uint32_t id, uint8_t len, const uint8_t *data) {
   switch (id) {
-  case 0x100:
-    g_vehicle.m_peripherals_windshield = data[0];
-    g_vehicle.m_peripherals_backrunninglights = data[1];
-    g_vehicle.m_peripherals_turn = data[2];
-    g_vehicle.m_peripherals_headlights = data[3];
-    g_vehicle.m_peripherals_brakelights = data[4];
-    g_vehicle.m_peripherals_hazard = data[5];
+  case 0x100: {
+    if (len >= sizeof(MsgPeripherals)) {
+      const MsgPeripherals* payload = (const MsgPeripherals*)data;
+      g_vehicle.m_peripherals_windshield = payload->windshield;
+      g_vehicle.m_peripherals_backrunninglights = payload->backrunninglights;
+      g_vehicle.m_peripherals_turn = payload->turn;
+      g_vehicle.m_peripherals_headlights = payload->headlights;
+      g_vehicle.m_peripherals_brakelights = payload->brakelights;
+      g_vehicle.m_peripherals_hazard = payload->hazard;
+    }
     break;
-  case 0x101:
-    // Contains software versions, not useful
+  }
+  
+  case 0x200: {
+    if (len >= sizeof(MsgPDB)) {
+      const MsgPDB* payload = (const MsgPDB*)data;
+      g_vehicle.m_pdb_current = payload->current;
+      g_vehicle.m_pdb_voltage = payload->voltage;
+      g_vehicle.m_pdb_motor_enabled = payload->motor_enabled;
+    }
     break;
-  case 0x200:
-    g_vehicle.m_pdb_current = (data[0] << 8) | data[1];
-    g_vehicle.m_pdb_voltage = (data[2] << 8) | data[3];
-    g_vehicle.m_pdb_motor_enabled = data[4];
+  }
+  
+  case 0x300: {
+    if (len >= sizeof(MsgMotor)) {
+      const MsgMotor* payload = (const MsgMotor*)data;
+      g_vehicle.m_motor_rpm = payload->rpm;
+    }
     break;
-  case 0x201:
-    // Contains software versions, not useful
+  }
+  
+  case 0x400: {
+    if (len >= sizeof(MsgThrottle)) {
+      const MsgThrottle* payload = (const MsgThrottle*)data;
+      g_vehicle.m_throttle_raw = payload->raw;
+      g_vehicle.m_throttle_average = payload->average;
+    }
     break;
-  case 0x300:
-    g_vehicle.m_motor_rpm = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | (data[3]);
+  }
+  
+  case 0x500: {
+    if (len >= sizeof(MsgJoulemeter)) {
+      const MsgJoulemeter* payload = (const MsgJoulemeter*)data;
+      g_vehicle.m_joulemeter_current = payload->current;
+      g_vehicle.m_joulemeter_voltage = payload->voltage;
+      g_vehicle.m_joulemeter_energy = payload->energy;
+    }
     break;
-  case 0x301:
-    // Contains software versions, not useful
-    break;
-  case 0x400:
-    g_vehicle.m_throttle_raw = (data[0] << 8) | data[1];
-    g_vehicle.m_throttle_average = (data[2] << 8) | data[3];
-    break;
-  case 0x401:
-    // Contains software versions, not useful
-    break;
-  case 0x500:
-    g_vehicle.m_joulemeter_current = (data[0] << 8) | data[1];
-    g_vehicle.m_joulemeter_voltage = (data[2] << 8) | data[3];
-    g_vehicle.m_joulemeter_energy = (data[4] << 24) | (data[5] << 16) | (data[6] << 8) | (data[7]);
-    break;
-  case 0x501:
-    // Contains software versions, not useful
-    break;
-  case 0x600:
-    // Contains software versions, not useful
-    break;
+  }
+
   default:
     break;
   }

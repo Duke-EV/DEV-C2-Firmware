@@ -11,6 +11,44 @@
 #error "CAN network library not written for chosen architecture"
 #endif // defined
 
+#pragma pack(push, 1) 
+struct MsgPeripherals {
+  uint8_t heartbeat;
+  uint8_t windshield;
+  uint8_t backrunninglights;
+  uint8_t turn;
+  uint8_t headlights;
+  uint8_t brakelights;
+  uint8_t hazard;
+};
+
+struct MsgPDB {
+  uint8_t heartbeat;
+  uint16_t current;
+  uint16_t voltage;
+  uint8_t motor_enabled;
+};
+
+struct MsgMotor {
+  uint8_t heartbeat;
+  uint32_t rpm;
+};
+
+struct MsgThrottle {
+  uint8_t heartbeat;
+  uint16_t raw;
+  uint16_t average;
+};
+
+struct MsgJoulemeter {
+  uint8_t heartbeat;
+  uint16_t current;
+  uint16_t voltage;
+  uint32_t energy;
+};
+
+#pragma pack(pop)
+
 enum DevBoard {
   COMMUNICATIONS,
   PERIPHERALS,
