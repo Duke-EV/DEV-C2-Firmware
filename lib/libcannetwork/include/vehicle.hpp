@@ -1,8 +1,8 @@
 #pragma once
 #include <stdint.h>
-
 #if defined(ARDUINO_ARCH_ESP32)
-#include <ESP32-TWAI-CAN.hpp>
+// Moving to CANFD documenation is here https://docs.espressif.com/projects/esp-idf/en/latest/esp32c5/api-reference/peripherals/twai.html
+#include "driver/twai.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #elif defined(CORE_TEENSY)
@@ -68,6 +68,9 @@ private:
   // Private methods common between architectures
 private:
   void send_message(uint32_t id, uint8_t len, const uint8_t *data);
+  #if defined(ARDUINO_ARCH_ESP32)
+    static bool twai_rx_cb(twai_node_handle_t handle, const twai_rx_done_event_data_t *edata, void *user_ctx);
+  #endif
   void on_receive(uint32_t id, uint8_t len, const uint8_t *data);
 
   // Public entry point
@@ -75,6 +78,7 @@ public:
   void init_network(DevBoard board);
   void send_all();
   #if defined(ARDUINO_ARCH_ESP32)
+  twai_node_handle_t m_twai_handle; //
   esp_err_t m_last_error;
   #endif
 };
