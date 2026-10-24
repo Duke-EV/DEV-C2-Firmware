@@ -60,7 +60,7 @@ private:
 #if defined(ARDUINO_ARCH_ESP32)
   static void twai_receive_task(void *args);
 #elif defined(CORE_TEENSY)
-  static void forward_flexcan(const CAN_message_t &msg);
+  static void forward_flexcan(const CANFD_message_t &msg);
 #else
 #error "CAN network library not written for chosen architecture"
 #endif

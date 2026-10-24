@@ -20,8 +20,8 @@
 Vehicle g_vehicle;
 
 #if defined(CORE_TEENSY)
-static FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> s_teensy_can;
-#endif
+static FlexCAN_T4FD<CAN3, RX_SIZE_256, TX_SIZE_16> s_teensy_can;
+#endif#endif
 
 #if defined(ARDUINO_ARCH_ESP32)
 void Vehicle::init_network(DevBoard board) {
@@ -85,13 +85,15 @@ bool Vehicle::twai_rx_cb(twai_node_handle_t handle, const twai_rx_done_event_dat
 #endif // defined(ARDUINO_ARCH_ESP32)
 
 #if defined(CORE_TEENSY)
-void Vehicle::forward_flexcan(const CAN_message_t &msg) {
+void Vehicle::forward_flexcan(const CANFD_message_t &msg) {
   g_vehicle.on_receive(msg.id, msg.len, msg.buf);
 }
 
 void Vehicle::init_network(DevBoard board) {
   m_board = board;
   s_teensy_can.begin();
+  s_teensy_can.setRegions(64);
+  s_teensy_can.setBaudRateData(2000000);
   s_teensy_can.setBaudRate(500000);
   s_teensy_can.enableFIFO(true);
   s_teensy_can.enableFIFOInterrupt();
@@ -100,11 +102,13 @@ void Vehicle::init_network(DevBoard board) {
 
 void Vehicle::send_message(uint32_t id, uint8_t len, const uint8_t *data) {
   // TODO: align with ESP32 implementation once message layout exists
-  CAN_message_t msg;
+  CANFD_message_t msg = {};
   msg.id = id;
   msg.len = len;
   msg.flags.extended = 0;  // Use standard 11-bit IDs (set to 1 for 29-bit extended)
   msg.flags.remote = 0;    // Not a remote frame
+  msg.brs = 1;
+  msg.edl = 1;
   msg.seq = 0;             // Not using sequential mode
 
   memcpy(msg.buf, data, len);
