@@ -61,8 +61,8 @@ void Vehicle::send_message(uint32_t id, uint8_t len, const uint8_t *data) {
   tx_msg.header.id = id;      // Set the CAN ID
   tx_msg.header.ide = 0;      // 0 for 11-bit Standard ID
   tx_msg.buffer_len = len;    // Set the payload length
+  tx_msg.buffer = (uint8_t *)data;
 
-  memcpy(tx_msg.buffer, data, len);
   esp_err_t err = twai_node_transmit(m_twai_handle, &tx_msg, pdMS_TO_TICKS(10));  
   if (err != ESP_OK) {
     m_last_error = err;
