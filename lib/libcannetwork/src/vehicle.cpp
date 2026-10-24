@@ -128,6 +128,7 @@ void Vehicle::send_all() {
     payload.headlights = g_vehicle.m_peripherals_headlights;
     payload.brakelights = g_vehicle.m_peripherals_brakelights;
     payload.hazard = g_vehicle.m_peripherals_hazard;
+    payload.slope = g_vehicle.m_peripherals_slope;
 
     g_vehicle.send_message(0x100, sizeof(payload), (const uint8_t*)&payload);
     break;
@@ -198,6 +199,7 @@ void Vehicle::on_receive(uint32_t id, uint8_t len, const uint8_t *data) {
       g_vehicle.m_peripherals_headlights = payload->headlights;
       g_vehicle.m_peripherals_brakelights = payload->brakelights;
       g_vehicle.m_peripherals_hazard = payload->hazard;
+      g_vehicle.m_peripherals_slope = payload->slope;
     }
     break;
   }

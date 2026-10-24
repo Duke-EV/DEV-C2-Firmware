@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <Wire.h>
 #include <vehicle.hpp>
 #include <algorithm> // Required for sorting
 #include <vector>
@@ -16,8 +17,10 @@
 #define sHazard 8     
 
 const int TRIG_PIN = 17;
-const int ECHO_PIN = 19;
+const int ECHO_PIN = 15;
 const unsigned int MAX_DIST = 400;
+
+const int SLOPE_SENSOR_ADDR = 0x6A;
 
 float median;
 float brake_dist = 4.0;
@@ -56,6 +59,31 @@ void setup() {
 
   Serial.begin(9600);
   digitalWrite(LED_BUILTIN, HIGH);
+
+  Wire.begin();
+  Wire.setClock(400000);     // 400 kHz; 100000 is the safe default
+
+  Wire.beginTransmission(SLOPE_SENSOR_ADDR);
+  Wire.write(0x10);
+  Wire.write(0x40);
+  Wire.endTransmission();
+}
+
+float measure_slope() {
+  Wire.beginTransmission(SLOPE_SENSOR_ADDR);
+  Wire.write(0x28);
+  if (Wire.endTransmission(false) != 0) {
+    return 0;
+  }
+  if (Wire.requestFrom(SLOPE_SENSOR_ADDR, 6) < 6) {
+    return 0;
+  }
+  int16_t x = Wire.read() | (Wire.read() << 8);
+  Wire.read();
+  Wire.read(); // skip Y
+  int16_t z = Wire.read() | (Wire.read() << 8);
+  int angle = atan2(x, z) * 180.0 / PI;
+  return angle + 180; // 180 is level; fits in uint16_t}
 }
 
 float measure_distance() {
@@ -105,6 +133,8 @@ void readStates() {
 
   Serial.println(median);
   g_vehicle.m_peripherals_brakelights = (median < brake_dist);
+
+  g_vehicle.m_peripherals_slope = measure_slope();
 }
 
 void loop() {

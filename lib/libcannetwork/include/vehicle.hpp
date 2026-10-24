@@ -20,6 +20,7 @@ struct MsgPeripherals {
   uint8_t headlights;
   uint8_t brakelights;
   uint8_t hazard;
+  uint16_t slope;
 };
 
 struct MsgPDB {
@@ -80,6 +81,7 @@ public:
   uint8_t m_peripherals_headlights;
   uint8_t m_peripherals_brakelights;
   uint8_t m_peripherals_hazard;
+  uint16_t m_peripherals_slope;
 
   uint16_t m_pdb_current;
   uint16_t m_pdb_voltage;
