@@ -36,6 +36,7 @@ uint8_t m_peripherals_turn; // 0, 1, OR 2 (off, left turn, right turn)
 uint8_t m_peripherals_headlights; // 0 OR 1: off or on
 uint8_t m_peripherals_brakelights; // 0 OR 1: off or on
 uint8_t m_peripherals_hazard; // 0 OR 1: off or on
+uint8_t m_peripherals_slope // Slope value (need more info)
 
 uint16_t m_pdb_current; // PDB Current, stored in milliamps
 uint16_t m_pdb_voltage; // PDB Voltage, stored in millivolts

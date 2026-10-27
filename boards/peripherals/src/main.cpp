@@ -69,21 +69,24 @@ void setup() {
   Wire.endTransmission();
 }
 
-float measure_slope() {
+uint16_t measure_slope() {
   Wire.beginTransmission(SLOPE_SENSOR_ADDR);
   Wire.write(0x28);
   if (Wire.endTransmission(false) != 0) {
     return 0;
   }
+
   if (Wire.requestFrom(SLOPE_SENSOR_ADDR, 6) < 6) {
     return 0;
   }
+
   int16_t x = Wire.read() | (Wire.read() << 8);
   Wire.read();
   Wire.read(); // skip Y
   int16_t z = Wire.read() | (Wire.read() << 8);
+
   int angle = atan2(x, z) * 180.0 / PI;
-  return angle + 180; // 180 is level; fits in uint16_t}
+  return angle + 180; // 180 is level; fits in uint16_t
 }
 
 float measure_distance() {
