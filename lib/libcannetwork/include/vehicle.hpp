@@ -2,7 +2,12 @@
 #include <stdint.h>
 
 #if defined(ARDUINO_ARCH_ESP32)
+#if defined(CONFIG_IDF_TARGET_ESP32C5)
+#include "esp_twai.h"
+#include "esp_twai_onchip.h"
+#else
 #include <ESP32-TWAI-CAN.hpp>
+#endif
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #elif defined(CORE_TEENSY)
@@ -58,7 +63,11 @@ public:
   // Private methods unique to architecture for sending/receiving can messages
 private:
 #if defined(ARDUINO_ARCH_ESP32)
+#if defined(CONFIG_IDF_TARGET_ESP32C5)
+  static bool twai_receive_callback(twai_node_handle_t handle, const twai_rx_done_event_data_t *event, void *context);
+#else
   static void twai_receive_task(void *args);
+#endif
 #elif defined(CORE_TEENSY)
   static void forward_flexcan(const CAN_message_t &msg);
 #else

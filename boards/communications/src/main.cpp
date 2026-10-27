@@ -3,8 +3,10 @@
 #include <SD.h>
 #include <Ticker.h>
 #include <esp_now.h>
+#include <Network.h>
 #include <WiFi.h>
 #include <BLEDevice.h>
+#include "notecard_telemetry.hpp"
 
 //////////////////////////////////////////////
 //        RemoteXY include library          //
@@ -171,7 +173,7 @@ typedef struct __attribute__((packed)) vehicle_telemetry {
 vehicle_telemetry g_telemetry;
 esp_now_peer_info_t telemetryPeerInfo;
 
-void OnEspNowSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
+void OnEspNowSent(const wifi_tx_info_t *tx_info, esp_now_send_status_t status) {
   Serial.println(status == ESP_NOW_SEND_SUCCESS ? "ESP-NOW OK" : "ESP-NOW FAIL");
 }
 
@@ -273,6 +275,7 @@ void setup() {
 
 
  Serial.begin(115200);
+ init_notecard_telemetry();
 
 
  int count = 0;
@@ -312,8 +315,7 @@ void setup() {
  pinMode(RL, OUTPUT);
 
 
- ledcSetup(0, 5000, 8);   // channel 0, 8-bit (0–255)
- ledcAttachPin(RL, 0);
+ ledcAttach(RL, 5000, 8);
 }
 
 
@@ -327,6 +329,7 @@ void readStates() {
 
 
 void loop() {
+ update_notecard_telemetry();
  RemoteXY_Handler();
  readStates();
 
@@ -346,11 +349,11 @@ void loop() {
 
 
  if (brakeLights) {
-   ledcWrite(0, 255);  // brake
+   ledcWrite(RL, 255);  // brake
  } else if (backrunningLights) {
-   ledcWrite(0, 20);   // running
+   ledcWrite(RL, 20);   // running
  } else {
-   ledcWrite(0, 0);   // running
+   ledcWrite(RL, 0);   // running
  }
 
 

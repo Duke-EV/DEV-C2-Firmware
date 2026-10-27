@@ -2,7 +2,12 @@
 #include <stdint.h>
 
 #if defined(ARDUINO_ARCH_ESP32)
+#if defined(CONFIG_IDF_TARGET_ESP32C5)
+#include "esp_twai.h"
+#include "esp_twai_onchip.h"
+#else
 #include <ESP32-TWAI-CAN.hpp>
+#endif
 #ifndef VEHICLE_TWAI_TX_PIN
 #define VEHICLE_TWAI_TX_PIN 33
 #endif
@@ -17,11 +22,74 @@
 
 Vehicle g_vehicle;
 
+#if defined(CONFIG_IDF_TARGET_ESP32C5)
+static twai_node_handle_t s_twai_node = nullptr;
+#endif
+
 #if defined(CORE_TEENSY)
 static FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> s_teensy_can;
 #endif
 
 #if defined(ARDUINO_ARCH_ESP32)
+#if defined(CONFIG_IDF_TARGET_ESP32C5)
+void Vehicle::init_network(DevBoard board) {
+  m_board = board;
+
+  twai_onchip_node_config_t config = {};
+  config.io_cfg.tx = (gpio_num_t)VEHICLE_TWAI_TX_PIN;
+  config.io_cfg.rx = (gpio_num_t)VEHICLE_TWAI_RX_PIN;
+  config.io_cfg.quanta_clk_out = GPIO_NUM_NC;
+  config.io_cfg.bus_off_indicator = GPIO_NUM_NC;
+  config.bit_timing.bitrate = 500000;
+  config.fail_retry_cnt = -1;
+  config.tx_queue_depth = 10;
+
+  m_last_error = twai_new_node_onchip(&config, &s_twai_node);
+  if (m_last_error != ESP_OK) {
+    return;
+  }
+
+  twai_event_callbacks_t callbacks = {};
+  callbacks.on_rx_done = Vehicle::twai_receive_callback;
+  m_last_error = twai_node_register_event_callbacks(s_twai_node, &callbacks, this);
+  if (m_last_error == ESP_OK) {
+    m_last_error = twai_node_enable(s_twai_node);
+  }
+}
+
+void Vehicle::send_message(uint32_t id, uint8_t len, const uint8_t *data) {
+  uint8_t payload[8] = {0};
+  twai_frame_t frame = {};
+  if (len > sizeof(payload) || s_twai_node == nullptr) {
+    m_last_error = ESP_ERR_INVALID_ARG;
+    return;
+  }
+
+  memcpy(payload, data, len);
+  frame.header.id = id;
+  frame.header.dlc = len;
+  frame.buffer = payload;
+  frame.buffer_len = len;
+  m_last_error = twai_node_transmit(s_twai_node, &frame, 0);
+  if (m_last_error == ESP_OK) {
+    m_last_error = twai_node_transmit_wait_all_done(s_twai_node, 100);
+  }
+}
+
+bool Vehicle::twai_receive_callback(twai_node_handle_t handle, const twai_rx_done_event_data_t *event, void *context) {
+  (void)event;
+  Vehicle *self = static_cast<Vehicle*>(context);
+  uint8_t data[8] = {0};
+  twai_frame_t frame = {};
+  frame.buffer = data;
+  frame.buffer_len = sizeof(data);
+
+  if (twai_node_receive_from_isr(handle, &frame) == ESP_OK) {
+    self->on_receive(frame.header.id, twaifd_dlc2len(frame.header.dlc), data);
+  }
+  return false;
+}
+#else
 void Vehicle::init_network(DevBoard board) {
   m_board = board;
   ESP32Can.setPins(VEHICLE_TWAI_TX_PIN, VEHICLE_TWAI_RX_PIN);
@@ -56,6 +124,7 @@ void Vehicle::twai_receive_task(void *args) {
       }
   }
 }
+#endif // defined(CONFIG_IDF_TARGET_ESP32C5)
 #endif // defined(ARDUINO_ARCH_ESP32)
 
 #if defined(CORE_TEENSY)
