@@ -1,29 +1,37 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include <Adafruit_MCP23X17.h>
+#include <SPI.h>
 #include <vehicle.hpp>
 #include <algorithm> // Required for sorting
 #include <vector>
 
-#define Windshield 33 
-#define HL 34         
-#define FLH 14         
-#define FRH 41         
+#define Windshield 33
+#define HL 34
+#define FLH 14
+#define FRH 41
 
-#define sTurnLeft 3   
-#define sTurnRight 4  
-#define sRunning 5    
-#define sBrakes 6     
-#define sHorn 7       
-#define sHazard 8     
+#define sTurnLeft 3
+#define sTurnRight 4
+#define sRunning 5
+#define sBrakes 6
+#define sHorn 7
+#define sHazard 8     //TODO: find new pin
 
-const int TRIG_PIN = 17;
-const int ECHO_PIN = 15;
+#define TRIG_PIN 14
+#define ECHO_PIN 15
+
+#define LATCH_PIN 16
+#define CLOCK_PIN 17
+#define DATA_PIN 18 
+
 const unsigned int MAX_DIST = 400;
 
-const int SLOPE_SENSOR_ADDR = 0x6A;
+const uint8_t SLOPE_SENSOR_ADDR = 0x6A;
+const uint8_t MCP_ADDR = 0x20;
 
 float median;
-float brake_dist = 4.0;
+float brake_dist = 4.0; 
 
 IntervalTimer timer;
 void send_all_wrapper() {
@@ -35,27 +43,49 @@ bool leftTurn = false;
 bool rightTurn = false;
 bool runningLights = false;
 
+Adafruit_MCP23X17 mcp;
+
+void write_to_shift_register(uint8_t data) {
+  digitalWrite(LATCH_PIN, LOW);
+  shiftOut(DATA_PIN, CLOCK_PIN, MSBFIRST, data);
+  digitalWrite(LATCH_PIN, HIGH);
+}
+
 void setup() {
+
   pinMode(LED_BUILTIN, OUTPUT);
-  pinMode(Windshield, OUTPUT);
-  pinMode(HL, OUTPUT);
-  pinMode(FLH, OUTPUT);
-  pinMode(FRH, OUTPUT);
+  if (!mcp.begin_I2C(MCP_ADDR)) {          // A0-A2 all tied to GND
+    Serial.println("No MCP23017 at 0x20 — check A0-A2 and RESET");
+    while (1);
+  }
 
-  pinMode(sTurnLeft, INPUT);
-  pinMode(sTurnRight, INPUT);
-  pinMode(sHazard, INPUT);
-  pinMode(sRunning, INPUT);
-  pinMode(sHorn, INPUT);
+  mcp.pinMode(0, INPUT_PULLUP);
+  mcp.pinMode(8, INPUT);
 
-  digitalWrite(Windshield, HIGH); 
+  // mcp.pinMode(LED_BUILTIN, OUTPUT);
+  // mcp.pinMode(Windshield, OUTPUT);
+  // mcp.pinMode(HL, OUTPUT);
+  // mcp.pinMode(FLH, OUTPUT);
+  // mcp.pinMode(FRH, OUTPUT);
+
+  mcp.pinMode(sTurnLeft, INPUT);
+  mcp.pinMode(sTurnRight, INPUT);
+  mcp.pinMode(sHazard, INPUT);
+  mcp.pinMode(sRunning, INPUT);
+  mcp.pinMode(sHorn, INPUT);
+
+  // mcp.digitalWrite(Windshield, HIGH);
+
+  pinMode(LATCH_PIN, OUTPUT);
+  pinMode(CLOCK_PIN, OUTPUT);
+  pinMode(DATA_PIN, OUTPUT);
 
   g_vehicle.init_network(DevBoard::PERIPHERALS);
   timer.begin(send_all_wrapper, 100000);
 
-  pinMode(TRIG_PIN, OUTPUT);
-  digitalWrite(TRIG_PIN, LOW);
-  pinMode(ECHO_PIN, INPUT);
+  mcp.pinMode(TRIG_PIN, OUTPUT);
+  mcp.digitalWrite(TRIG_PIN, LOW);
+  mcp.pinMode(ECHO_PIN, INPUT);
 
   Serial.begin(9600);
   digitalWrite(LED_BUILTIN, HIGH);
@@ -67,6 +97,8 @@ void setup() {
   Wire.write(0x10);
   Wire.write(0x40);
   Wire.endTransmission();
+
+
 }
 
 uint16_t measure_slope() {
@@ -89,28 +121,30 @@ uint16_t measure_slope() {
   return angle + 180; // 180 is level; fits in uint16_t
 }
 
+//TODO: fix input.
 float measure_distance() {
   // Use pulseIn for safety - it won't freeze your code if the sensor fails
-  digitalWrite(TRIG_PIN, LOW);
+  mcp.digitalWrite(TRIG_PIN, LOW);
   delayMicroseconds(2);
-  digitalWrite(TRIG_PIN, HIGH);
+  mcp.digitalWrite(TRIG_PIN, HIGH);
   delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
+  mcp.digitalWrite(TRIG_PIN, LOW);
 
   // pulseIn returns the duration in microseconds
   // 30000 is the timeout (30ms)
   unsigned long duration = pulseIn(ECHO_PIN, HIGH, 30000);
-  
+
   if (duration == 0) return 999.0; // Return out of range if no echo
   return duration / 58.0;
 }
 
+//TODO: fix input
 void readStates() {
-  leftTurn = digitalRead(sTurnLeft) == HIGH;
-  rightTurn = digitalRead(sTurnRight) == HIGH;
-  hazard = digitalRead(sHazard) == LOW; 
+  leftTurn = mcp.digitalRead(sTurnLeft) == HIGH;
+  rightTurn = mcp.digitalRead(sTurnRight) == HIGH;
+  hazard = mcp.digitalRead(sHazard) == LOW;
 
-  if(digitalRead(sRunning) == LOW){ 
+  if(mcp.digitalRead(sRunning) == LOW){
     runningLights = true;
     g_vehicle.m_peripherals_backrunninglights = 1;
     g_vehicle.m_peripherals_headlights = 1;
@@ -130,7 +164,7 @@ void readStates() {
     }
     delay(50); // Give the sensor a moment between pings
   }
-  
+
   std::sort(brake_readings.begin(), brake_readings.end());
   median = brake_readings[brake_readings.size()/2]; // The middle value is the median
 
@@ -141,39 +175,51 @@ void readStates() {
 }
 
 void loop() {
-  readStates();  
+  readStates();
+
+  uint8_t data = 0;
 
   // Turn signal/Hazard flashing logic (1Hz)
   if(millis() % 1000 >= 500) { //turn on for 1 second
     if(hazard){
-      digitalWrite(FLH, HIGH);
-      digitalWrite(FRH, HIGH);
+      // digitalWrite(FLH, HIGH);
+      // digitalWrite(FRH, HIGH);
+      bitSet(data, FLH);
+      bitSet(data, FRH);
       g_vehicle.m_peripherals_hazard = 1;
       g_vehicle.m_peripherals_turn = 0;
     }
     else if(leftTurn){
-      digitalWrite(FLH, HIGH);
+      // digitalWrite(FLH, HIGH);
+      bitSet(data, FLH);
       g_vehicle.m_peripherals_hazard = 0;
       g_vehicle.m_peripherals_turn = 1;
     }
     else if(rightTurn) {
-      digitalWrite(FRH, HIGH);
+      // digitalWrite(FRH, HIGH);
+      bitSet(data, FRH);
       g_vehicle.m_peripherals_hazard = 0;
       g_vehicle.m_peripherals_turn = 2;
     }
   }
   else { //turn off for 1 second
-    digitalWrite(FLH, LOW);
-    digitalWrite(FRH, LOW);
+    // digitalWrite(FLH, LOW);
+    bitClear(data, FLH);
+    // digitalWrite(FRH, LOW);
+    bitClear(data, FRH);
     g_vehicle.m_peripherals_hazard = 0;
     g_vehicle.m_peripherals_turn = 0;
-    
+
   }
 
   if(runningLights){
-    digitalWrite(HL, HIGH);
+    // digitalWrite(HL, HIGH);
+    bitSet(data, HL);
   }
   else {
-    digitalWrite(HL, LOW);
+    // digitalWrite(HL, LOW);
+    bitClear(data, HL);
   }
+
+  write_to_shift_register(data);
 }
