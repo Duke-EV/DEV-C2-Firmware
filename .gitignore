@@ -6,3 +6,4 @@
 .DS_Store
 .venv
 boards/throttle/.vscode/extensions.json
+boards/communications/.env
