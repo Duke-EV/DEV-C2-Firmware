@@ -82,25 +82,23 @@ static bool configure_template()
     return false;
   }
 
-  // SETS SENT INFO TYPES
-  // 12 means 16 bit
-  // 14 means 32 bit
+  // SETS SENT INFO TYPES AS SHOWN IN vehicle.hpp
   JAddBoolToObject(body, "peripherals_windshield", true);
   JAddBoolToObject(body, "peripherals_back_running_lights", true);
-  JAddNumberToObject(body, "peripherals_turn", 12);
+  JAddNumberToObject(body, "peripherals_turn", TUINT8);
   JAddBoolToObject(body, "peripherals_headlights", true);
   JAddBoolToObject(body, "peripherals_brake_lights", true);
   JAddBoolToObject(body, "peripherals_hazard", true);
-  JAddNumberToObject(body, "pdb_current_ma", 12);
-  JAddNumberToObject(body, "pdb_voltage_mv", 12);
+  JAddNumberToObject(body, "pdb_current_ma", TUINT16);
+  JAddNumberToObject(body, "pdb_voltage_mv", TUINT16);
   JAddBoolToObject(body, "pdb_motor_enabled", true);
-  JAddNumberToObject(body, "motor_rpm", 14);
-  JAddNumberToObject(body, "throttle_raw", 12);
-  JAddNumberToObject(body, "throttle_average", 12);
-  JAddNumberToObject(body, "joulemeter_current", 12);
-  JAddNumberToObject(body, "joulemeter_voltage", 12);
-  JAddNumberToObject(body, "joulemeter_energy", 14);
-  JAddNumberToObject(body, "uptime_ms", 14);
+  JAddNumberToObject(body, "motor_rpm", TUINT32);
+  JAddNumberToObject(body, "throttle_raw", TUINT16);
+  JAddNumberToObject(body, "throttle_average", TUINT16);
+  JAddNumberToObject(body, "joulemeter_current", TUINT16);
+  JAddNumberToObject(body, "joulemeter_voltage", TUINT16);
+  JAddNumberToObject(body, "joulemeter_energy", TUINT32);
+  JAddNumberToObject(body, "uptime_ms", TUINT32);
 
   // if request was not transmitted sucessfully, return false
   if (!s_notecard.sendRequest(request))
