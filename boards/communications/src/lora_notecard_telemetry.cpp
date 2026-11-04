@@ -74,6 +74,8 @@ static bool configure_template()
 
   // add details to json
   JAddStringToObject(request, "file", TELEMETRY_FILE); // associates template with the telemetry file
+  JAddStringToObject(request, "format", "compact"); // Required for LoRa
+  JAddNumberToObject(request, "port", 1);          // Unique telemetry template port
   J *body = JAddObjectToObject(request, "body");       // creates nested template body
   // if body is empty, delete request and return false
   if (body == nullptr)
@@ -164,7 +166,7 @@ static void request_sync()
     Serial.println("Notecard: hub.sync failed; Notes remain queued");
     return;
   }
-  Serial.println("Notecard: queued Notes are syncing");
+  Serial.println("Notecard: sync requested");
 }
 
 // reads data
