@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <Adafruit_MCP23X17.h>
+#include <ASM330LHHSensor.h>
 #include <SPI.h>
 #include <vehicle.hpp>
 #include <algorithm> // Required for sorting
@@ -21,9 +22,9 @@
 #define TRIG_PIN 14
 #define ECHO_PIN 15
 
-#define LATCH_PIN 16
-#define CLOCK_PIN 17
-#define DATA_PIN 18 
+#define LATCH_PIN 33
+#define CLOCK_PIN 13
+#define DATA_PIN 11
 
 const unsigned int MAX_DIST = 400;
 
@@ -43,17 +44,43 @@ bool leftTurn = false;
 bool rightTurn = false;
 bool runningLights = false;
 
+// One byte per shift register. Each byte holds outputs 0 through 7.
+uint8_t data[2] = {0, 0};
+
 Adafruit_MCP23X17 mcp;
 
-void write_to_shift_register(uint8_t data) {
+ASM330LHH imu(&Wire)
+
+// index 0-7 selects a bit in data[0]. index 8-15 selects a bit in data[1].
+// bit is the value written there: 0 or 1.
+// Inside a byte, bit 0 is worth 1 and bit 7 is worth 128.
+void bitSetData(uint8_t index, uint8_t bit) {
+  if (index > 15 || bit > 1) {
+    return;
+  }
+
+  uint8_t byteIndex = index / 8;
+  uint8_t bitIndex = index % 8;
+
+  if (bit == 1) {
+    bitSet(data[byteIndex], bitIndex);
+  } else {
+    bitClear(data[byteIndex], bitIndex);
+  }
+}
+
+void write_to_shift_register() {
   digitalWrite(LATCH_PIN, LOW);
-  shiftOut(DATA_PIN, CLOCK_PIN, MSBFIRST, data);
+  shiftOut(DATA_PIN, CLOCK_PIN, MSBFIRST, data[0]);
+  shiftOut(DATA_PIN, CLOCK_PIN, MSBFIRST, data[1]);
   digitalWrite(LATCH_PIN, HIGH);
 }
 
 void setup() {
-
   pinMode(LED_BUILTIN, OUTPUT);
+
+  Serial.begin(9600);
+
   if (!mcp.begin_I2C(MCP_ADDR)) {          // A0-A2 all tied to GND
     Serial.println("No MCP23017 at 0x20 — check A0-A2 and RESET");
     while (1);
@@ -62,43 +89,35 @@ void setup() {
   mcp.pinMode(0, INPUT_PULLUP);
   mcp.pinMode(8, INPUT);
 
-  // mcp.pinMode(LED_BUILTIN, OUTPUT);
-  // mcp.pinMode(Windshield, OUTPUT);
-  // mcp.pinMode(HL, OUTPUT);
-  // mcp.pinMode(FLH, OUTPUT);
-  // mcp.pinMode(FRH, OUTPUT);
-
   mcp.pinMode(sTurnLeft, INPUT);
   mcp.pinMode(sTurnRight, INPUT);
   mcp.pinMode(sHazard, INPUT);
   mcp.pinMode(sRunning, INPUT);
   mcp.pinMode(sHorn, INPUT);
 
-  // mcp.digitalWrite(Windshield, HIGH);
+  mcp.pinMode(TRIG_PIN, OUTPUT);
+  mcp.digitalWrite(TRIG_PIN, LOW);
+  mcp.pinMode(ECHO_PIN, INPUT);
 
   pinMode(LATCH_PIN, OUTPUT);
   pinMode(CLOCK_PIN, OUTPUT);
   pinMode(DATA_PIN, OUTPUT);
 
+  bitSetData(Windshield, 1);
+  
   g_vehicle.init_network(DevBoard::PERIPHERALS);
   timer.begin(send_all_wrapper, 100000);
-
-  mcp.pinMode(TRIG_PIN, OUTPUT);
-  mcp.digitalWrite(TRIG_PIN, LOW);
-  mcp.pinMode(ECHO_PIN, INPUT);
-
-  Serial.begin(9600);
-  digitalWrite(LED_BUILTIN, HIGH);
-
+  
   Wire.begin();
   Wire.setClock(400000);     // 400 kHz; 100000 is the safe default
 
-  Wire.beginTransmission(SLOPE_SENSOR_ADDR);
-  Wire.write(0x10);
-  Wire.write(0x40);
-  Wire.endTransmission();
+  imu.begin();
+  // Wire.beginTransmission(SLOPE_SENSOR_ADDR);
+  // Wire.write(0x10);
+  // Wire.write(0x40);
+  // Wire.endTransmission();
 
-
+  digitalWrite(LED_BUILTIN, HIGH);
 }
 
 uint16_t measure_slope() {
@@ -121,7 +140,6 @@ uint16_t measure_slope() {
   return angle + 180; // 180 is level; fits in uint16_t
 }
 
-//TODO: fix input.
 float measure_distance() {
   // Use pulseIn for safety - it won't freeze your code if the sensor fails
   mcp.digitalWrite(TRIG_PIN, LOW);
@@ -132,7 +150,8 @@ float measure_distance() {
 
   // pulseIn returns the duration in microseconds
   // 30000 is the timeout (30ms)
-  unsigned long duration = pulseIn(ECHO_PIN, HIGH, 30000);
+  // unsigned long duration = pulseIn(ECHO_PIN, HIGH, 30000);
+  unsigned long duration = 0; //no more ultrasonic sensor
 
   if (duration == 0) return 999.0; // Return out of range if no echo
   return duration / 58.0;
@@ -177,49 +196,42 @@ void readStates() {
 void loop() {
   readStates();
 
-  uint8_t data = 0;
+  data[0] = 0;
+  data[1] = 0;
 
   // Turn signal/Hazard flashing logic (1Hz)
   if(millis() % 1000 >= 500) { //turn on for 1 second
     if(hazard){
-      // digitalWrite(FLH, HIGH);
-      // digitalWrite(FRH, HIGH);
-      bitSet(data, FLH);
-      bitSet(data, FRH);
+      bitSetData(FLH, 1);
+      bitSetData(FRH, 1);
       g_vehicle.m_peripherals_hazard = 1;
       g_vehicle.m_peripherals_turn = 0;
     }
     else if(leftTurn){
-      // digitalWrite(FLH, HIGH);
-      bitSet(data, FLH);
+      bitSetData(FLH, 1);
       g_vehicle.m_peripherals_hazard = 0;
       g_vehicle.m_peripherals_turn = 1;
     }
     else if(rightTurn) {
-      // digitalWrite(FRH, HIGH);
-      bitSet(data, FRH);
+      bitSetData(FRH, 1);
       g_vehicle.m_peripherals_hazard = 0;
       g_vehicle.m_peripherals_turn = 2;
     }
   }
   else { //turn off for 1 second
-    // digitalWrite(FLH, LOW);
-    bitClear(data, FLH);
-    // digitalWrite(FRH, LOW);
-    bitClear(data, FRH);
+    bitSetData(FLH, 0);
+    bitSetData(FRH, 0);
     g_vehicle.m_peripherals_hazard = 0;
     g_vehicle.m_peripherals_turn = 0;
 
   }
 
   if(runningLights){
-    // digitalWrite(HL, HIGH);
-    bitSet(data, HL);
+    bitSetData(HL, 1);
   }
   else {
-    // digitalWrite(HL, LOW);
-    bitClear(data, HL);
+    bitSetData(HL, 0);
   }
 
-  write_to_shift_register(data);
+  write_to_shift_register();
 }
