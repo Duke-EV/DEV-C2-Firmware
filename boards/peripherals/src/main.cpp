@@ -28,7 +28,6 @@
 
 const unsigned int MAX_DIST = 400;
 
-const uint8_t SLOPE_SENSOR_ADDR = 0x6A;
 const uint8_t MCP_ADDR = 0x20;
 
 float median;
@@ -49,7 +48,62 @@ uint8_t data[2] = {0, 0};
 
 Adafruit_MCP23X17 mcp;
 
-ASM330LHH imu(&Wire)
+ASM330LHHSensor imu(&Wire);
+
+// Gravity in m/s^2. Used to turn the chip's milli-g readings into real acceleration.
+const float G = 9.80665f;
+// Gyro share of the slope filter. 0.98 trusts the gyro for fast changes.
+// The other 0.02 slowly pulls the estimate back to the accelerometer.
+const float ALPHA = 0.98f;
+
+float gyroBiasY = 0;             // dps, measured at startup while the car is still
+float pitchOffset = 0;           // rad, mounting angle (calibrated on level ground)
+float pitch = 0;                 // rad, filtered nose-up angle
+uint32_t lastUs = 0;
+
+// Forward acceleration of the car in m/s^2. Leave at 0 until wheel speed is available.
+// Braking then looks a little like a slope, because this board cannot subtract it yet.
+float vehicleAccel = 0;
+
+// Read one accel sample (m/s^2) and the pitch gyro (degrees per second).
+// a[] from the library is milli-g. g[] is milli-degrees per second.
+void readIMU(float &ax, float &ay, float &az, float &gy) {
+  int32_t a[3], g[3];
+  imu.Get_X_Axes(a);
+  imu.Get_G_Axes(g);
+  // Axis order matches the chip. Swap these if nose-up comes out with the wrong sign.
+  ax = a[0] * 0.001f * G;
+  ay = a[1] * 0.001f * G;
+  az = a[2] * 0.001f * G;
+  gy = g[1] * 0.001f;
+}
+
+// Nose-up pitch from the accelerometer only, in radians.
+// atan2(forward, vertical) is 0 when the car is level.
+float accelPitch(float ax, float ay, float az) {
+  float axc = ax - vehicleAccel;
+  return atan2f(axc, sqrtf(ay * ay + az * az));
+}
+
+// Call with the car stationary. Averages gyro bias.
+// When carIsOnLevelGround is true, the average accel pitch becomes the zero point.
+void calibrate(bool carIsOnLevelGround) {
+  const int N = 400;
+  float sumGy = 0, sumP = 0;
+  for (int i = 0; i < N; i++) {
+    float ax, ay, az, gy;
+    readIMU(ax, ay, az, gy);
+    sumGy += gy;
+    sumP += atan2f(ax, sqrtf(ay * ay + az * az));
+    delay(5);
+  }
+  gyroBiasY = sumGy / N;
+  float p = sumP / N;
+  if (carIsOnLevelGround) {
+    pitchOffset = p;
+  }
+  pitch = p - pitchOffset;
+}
 
 // index 0-7 selects a bit in data[0]. index 8-15 selects a bit in data[1].
 // bit is the value written there: 0 or 1.
@@ -79,7 +133,7 @@ void write_to_shift_register() {
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
 
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   if (!mcp.begin_I2C(MCP_ADDR)) {          // A0-A2 all tied to GND
     Serial.println("No MCP23017 at 0x20 — check A0-A2 and RESET");
@@ -112,32 +166,47 @@ void setup() {
   Wire.setClock(400000);     // 400 kHz; 100000 is the safe default
 
   imu.begin();
-  // Wire.beginTransmission(SLOPE_SENSOR_ADDR);
-  // Wire.write(0x10);
-  // Wire.write(0x40);
-  // Wire.endTransmission();
+  imu.Enable_X();
+  imu.Enable_G();
+  delay(100);
+
+  // About 2 seconds. The car must sit still on level ground so bias and zero are valid.
+  Serial.println("Keep the car still on LEVEL ground...");
+  calibrate(true);
+  lastUs = micros();
 
   digitalWrite(LED_BUILTIN, HIGH);
 }
 
-uint16_t measure_slope() {
-  Wire.beginTransmission(SLOPE_SENSOR_ADDR);
-  Wire.write(0x28);
-  if (Wire.endTransmission(false) != 0) {
-    return 0;
+// One filter step. Gyro tracks quick pitch changes. Accelerometer slowly corrects drift.
+// CAN slope uses the old scale: 180 means level. 185 means 5 degrees nose-up.
+void updateSlope() {
+  float ax, ay, az, gy;
+  readIMU(ax, ay, az, gy);
+
+  uint32_t now = micros();
+  float dt = (now - lastUs) * 1e-6f;
+  lastUs = now;
+
+  // Gyro +y (z up) tips the nose down, so nose-up rate is the opposite sign.
+  float pitchRate = -(gy - gyroBiasY) * DEG_TO_RAD;
+
+  float pAcc = accelPitch(ax, ay, az) - pitchOffset;
+  pitch = ALPHA * (pitch + pitchRate * dt) + (1.0f - ALPHA) * pAcc;
+
+  float slopeDeg = pitch * RAD_TO_DEG;
+  float gradePct = tanf(pitch) * 100.0f;
+
+  int slopeEncoded = (int)(slopeDeg + 180.0f);
+  if (slopeEncoded < 0) {
+    slopeEncoded = 0;
   }
-
-  if (Wire.requestFrom(SLOPE_SENSOR_ADDR, 6) < 6) {
-    return 0;
+  if (slopeEncoded > 65535) {
+    slopeEncoded = 65535;
   }
+  g_vehicle.m_peripherals_slope = (uint16_t)slopeEncoded;
 
-  int16_t x = Wire.read() | (Wire.read() << 8);
-  Wire.read();
-  Wire.read(); // skip Y
-  int16_t z = Wire.read() | (Wire.read() << 8);
-
-  int angle = atan2(x, z) * 180.0 / PI;
-  return angle + 180; // 180 is level; fits in uint16_t
+  Serial.printf("pitch %.2f deg | grade %.1f %%\n", slopeDeg, gradePct);
 }
 
 float measure_distance() {
@@ -189,11 +258,10 @@ void readStates() {
 
   Serial.println(median);
   g_vehicle.m_peripherals_brakelights = (median < brake_dist);
-
-  g_vehicle.m_peripherals_slope = measure_slope();
 }
 
 void loop() {
+  updateSlope();
   readStates();
 
   data[0] = 0;
