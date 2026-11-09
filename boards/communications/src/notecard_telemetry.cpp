@@ -42,7 +42,7 @@ bool init_notecard_telemetry()
   JAddStringToObject(request, "product", NOTECARD_PRODUCT_UID);
   JAddStringToObject(request, "mode", "minimum"); // minimum disables automatic notecard synchronization???
   // checks if request send suceeded
-  if (!s_notecard.sendRequest(request))
+  if (!s_notecard.sendRequestWithRetry(request, 5))
   {
     Serial.println("Notecard: hub.set failed");
     return false;
