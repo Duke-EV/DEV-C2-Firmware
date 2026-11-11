@@ -1,0 +1,6 @@
+.env
+.notehub_cursor
+telemetry.csv
+__pycache__/
+.venv/
+
