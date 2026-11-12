@@ -219,6 +219,106 @@ void send_all(void *args) {
 }
 
 
+// One code per board: 0 means no errors; 1-15 select the fault below.
+static const char *const COMMS_ERRORS[16] = {
+  "",                           // 0: no errors
+  "CAN_INIT_FAILED",            // 1
+  "CAN_BUS_OFF",                // 2
+  "CAN_TRANSMIT_FAILED",        // 3
+  "CAN_RECEIVE_OVERFLOW",       // 4
+  "BOARD_HEARTBEAT_TIMEOUT",    // 5
+  "SD_INIT_FAILED",             // 6
+  "SD_FILE_OPEN_FAILED",        // 7
+  "SD_WRITE_FAILED",            // 8
+  "WIFI_INIT_FAILED",           // 9
+  "ESPNOW_INIT_FAILED",         // 10
+  "ESPNOW_ADD_PEER_FAILED",     // 11
+  "ESPNOW_SEND_FAILED",         // 12
+  "ESPNOW_CHANNEL_MISMATCH",    // 13
+  "OUT_OF_MEMORY",              // 14
+  "BLE_INIT_FAILED"             // 15
+};
+
+static const char *const ESC_ERRORS[16] = {
+  "",                           // 0: no errors
+  "MOTOR_OVERCURRENT",          // 1
+  "DC_BUS_OVERVOLTAGE",         // 2
+  "DC_BUS_UNDERVOLTAGE",        // 3
+  "DRIVER_OVERTEMPERATURE",     // 4
+  "MOTOR_OVERTEMPERATURE",      // 5
+  "GATE_DRIVER_FAULT",          // 6
+  "MOTOR_PHASE_SHORT",          // 7
+  "MOTOR_PHASE_OPEN",           // 8
+  "INVALID_HALL_STATE",         // 9
+  "MOTOR_STALL",                // 10
+  "MOTOR_OVERSPEED",            // 11
+  "INVALID_THROTTLE_VALUE",     // 12
+  "THROTTLE_MESSAGE_TIMEOUT",   // 13
+  "PDB_MESSAGE_TIMEOUT",        // 14
+  "CAN_BUS_OFF"                 // 15
+};
+
+static const char *const AUX_ERRORS[16] = {
+  "",                           // 0: no errors
+  "SUPPLY_UNDERVOLTAGE",        // 1
+  "OUTPUT_DRIVER_OVERTEMP",     // 2
+  "HEADLIGHT_OPEN_LOAD",        // 3
+  "HEADLIGHT_SHORT_CIRCUIT",    // 4
+  "BRAKE_LIGHT_OPEN_LOAD",      // 5
+  "BRAKE_LIGHT_SHORT_CIRCUIT",  // 6
+  "LEFT_TURN_OPEN_LOAD",        // 7
+  "LEFT_TURN_SHORT_CIRCUIT",    // 8
+  "RIGHT_TURN_OPEN_LOAD",       // 9
+  "RIGHT_TURN_SHORT_CIRCUIT",   // 10
+  "WINDSHIELD_MOTOR_STALL",     // 11
+  "BRAKE_SENSOR_ECHO_TIMEOUT",  // 12
+  "BRAKE_SENSOR_INVALID_DATA",  // 13
+  "INVALID_SWITCH_STATE",      // 14
+  "CAN_BUS_OFF"                 // 15
+};
+
+static const char *const PDB_ERRORS[16] = {
+  "",                           // 0: no errors
+  "PACK_UNDERVOLTAGE",          // 1
+  "PACK_OVERVOLTAGE",           // 2
+  "PACK_OVERCURRENT",           // 3
+  "OUTPUT_SHORT_CIRCUIT",       // 4
+  "BOARD_OVERTEMPERATURE",      // 5
+  "VOLTAGE_SENSOR_FAULT",       // 6
+  "CURRENT_SENSOR_FAULT",       // 7
+  "PRECHARGE_TIMEOUT",          // 8
+  "PRECHARGE_RESISTOR_FAULT",   // 9
+  "CONTACTOR_FAILED_TO_CLOSE",  // 10
+  "CONTACTOR_WELDED",           // 11
+  "FUSE_OPEN",                  // 12
+  "EMERGENCY_STOP_ACTIVE",      // 13
+  "ESC_MESSAGE_TIMEOUT",        // 14
+  "CAN_BUS_OFF"                 // 15
+};
+
+// STILL TO IMPLEMENT: The sending and receiving of the board_err codes
+
+void appendBoardError(String &errors, const char *board, uint16_t code,
+                      const char *const messages[]) {
+  if (code == 0) {
+    return;
+  }
+
+  if (errors.length() > 0) {
+    errors += "; ";
+  }
+
+  errors += board;
+  errors += ": ";
+
+  if (code < 16) {
+    errors += messages[code];
+  } else {
+    errors += "UNKNOWN_ERROR_CODE_";
+    errors += String(code);
+  }
+}
+
 File dataFile;
 void write_to_sd(void *args) {
   const int HISTORY_SIZE = 5;
@@ -233,33 +333,10 @@ void write_to_sd(void *args) {
   int previousThrottle = 0;
   bool havePrevious = false;
 
-  int voltage = g_vehicle.m_pdb_voltage;
-  int current = g_vehicle.m_pdb_current;
-  int throttle = g_vehicle.m_throttle_average;
-
-  // m_comms_board_err
-
-  // comms_errors = 
-
-  // if (g_vehicle.comms_error != 0) {
-  //   string error = dictionry_comms[comms_error]
-  //   print( error on a new line)
-  // }
-  // comms 
-  // Esc 
-  // Auxillaries
-  // PDB
-
-
-  // TO IMPLEMENT: Encoding error messages -- Array for error messages one for each board
-  // arr = [
-  //   "",
-  //   "board fried",
-    
-  // ]
-
-  
   while(true) {
+    int voltage = g_vehicle.m_pdb_voltage;
+    int current = g_vehicle.m_pdb_current;
+    int throttle = g_vehicle.m_throttle_average;
     String notes = "";
 
     // Wait until five previous readings are available.
@@ -301,9 +378,14 @@ void write_to_sd(void *args) {
     previousThrottle = throttle;
     havePrevious = true;
 
+    String errors = "";
+    appendBoardError(errors, "COMMS", g_vehicle.m_comms_board_err, COMMS_ERRORS);
+    appendBoardError(errors, "ESC", g_vehicle.m_esc_board_err, ESC_ERRORS);
+    appendBoardError(errors, "AUX", g_vehicle.m_aux_board_err, AUX_ERRORS);
+    appendBoardError(errors, "PDB", g_vehicle.m_pdb_board_err, PDB_ERRORS);
 
     dataFile.print(millis());
-    dataFile.print(",")
+    dataFile.print(",");
     dataFile.print(g_vehicle.m_peripherals_windshield);
     dataFile.print(",");
     dataFile.print(g_vehicle.m_peripherals_backrunninglights);
@@ -328,7 +410,9 @@ void write_to_sd(void *args) {
     dataFile.print(",");
     dataFile.print(throttle);
     dataFile.print(",");
-    dataFile.println(notes);
+    dataFile.print(notes);
+    dataFile.print(",");
+    dataFile.println(errors);
 
     dataFile.flush();
     vTaskDelay(pdMS_TO_TICKS(100));
@@ -397,7 +481,11 @@ void setup() {
  Serial.println(filename);
 
 
- dataFile.println("timestamp_ms,rpm,current,throttle_avg,throttle_raw");
+ dataFile.println(
+   "timestamp_ms,windshield,backrunning_lights,turn,headlights,"
+   "brake_lights,hazard,current_ma,voltage_mv,motor_enabled,"
+   "rpm,throttle_raw,throttle_avg,notes,errors"
+ );
 
 
  xTaskCreate(write_to_sd, "Writing to SD", 4096, nullptr, 5, nullptr);

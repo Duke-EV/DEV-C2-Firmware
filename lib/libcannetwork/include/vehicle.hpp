@@ -56,6 +56,7 @@ public:
   uint16_t m_joulemeter_voltage;
   uint32_t m_joulemeter_energy;
 
+  // One active error code per board: 0 = no errors, 1-15 = board-specific fault.
   uint16_t m_comms_board_err;
   uint16_t m_esc_board_err;
   uint16_t m_aux_board_err;
