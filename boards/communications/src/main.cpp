@@ -221,21 +221,118 @@ void send_all(void *args) {
 
 File dataFile;
 void write_to_sd(void *args) {
- while(true) {
-   dataFile.print(millis());
-   dataFile.print(",");
-   dataFile.print(g_vehicle.m_motor_rpm);
-   dataFile.print(",");
-   dataFile.print(g_vehicle.m_pdb_current);
-   dataFile.print(",");
-   dataFile.print(g_vehicle.m_throttle_average);
-   dataFile.print(",");
-   dataFile.println(g_vehicle.m_throttle_raw);  // println only on the last one
+  const int HISTORY_SIZE = 5;
+  const int VOLTAGE_SPIKE_MV = 3000; // 3 V above average
+  const int CURRENT_SPIKE_MA = 5000; // 5 A above average
+
+  int voltageHistory[HISTORY_SIZE] = {0};
+  int currentHistory[HISTORY_SIZE] = {0};
+  int historyIndex = 0;
+  int historyCount = 0;
+
+  int previousThrottle = 0;
+  bool havePrevious = false;
+
+  int voltage = g_vehicle.m_pdb_voltage;
+  int current = g_vehicle.m_pdb_current;
+  int throttle = g_vehicle.m_throttle_average;
+
+  // m_comms_board_err
+
+  // comms_errors = 
+
+  // if (g_vehicle.comms_error != 0) {
+  //   string error = dictionry_comms[comms_error]
+  //   print( error on a new line)
+  // }
+  // comms 
+  // Esc 
+  // Auxillaries
+  // PDB
 
 
-   dataFile.flush();
-   vTaskDelay(pdMS_TO_TICKS(100));
- }
+  // TO IMPLEMENT: Encoding error messages -- Array for error messages one for each board
+  // arr = [
+  //   "",
+  //   "board fried",
+    
+  // ]
+
+  
+  while(true) {
+    String notes = "";
+
+    // Wait until five previous readings are available.
+    if (historyCount == HISTORY_SIZE) {
+      long voltageSum = 0;
+      long currentSum = 0;
+
+      for (int i = 0; i < HISTORY_SIZE; i++) {
+        voltageSum += voltageHistory[i];
+        currentSum += currentHistory[i];
+      }
+
+      float voltageAverage = voltageSum / 5.0f;
+      float currentAverage = currentSum / 5.0f;
+
+      if (voltage - voltageAverage >= VOLTAGE_SPIKE_MV) {
+        notes += "VOLTAGE_SPIKE;";
+      }
+
+      if (current - currentAverage >= CURRENT_SPIKE_MA) {
+        notes += "CURRENT_SPIKE;";
+      }
+    }
+
+    // Keep the previous throttle-increase check.
+    if (havePrevious && throttle > previousThrottle) {
+      notes += "THROTTLE_INCREASE;";
+    }
+
+    // Replace the oldest reading AFTER checking for spikes.
+    voltageHistory[historyIndex] = voltage;
+    currentHistory[historyIndex] = current;
+    historyIndex = (historyIndex + 1) % HISTORY_SIZE;
+
+    if (historyCount < HISTORY_SIZE) {
+      historyCount++;
+    }
+
+    previousThrottle = throttle;
+    havePrevious = true;
+
+
+    dataFile.print(millis());
+    dataFile.print(",")
+    dataFile.print(g_vehicle.m_peripherals_windshield);
+    dataFile.print(",");
+    dataFile.print(g_vehicle.m_peripherals_backrunninglights);
+    dataFile.print(",");
+    dataFile.print(g_vehicle.m_peripherals_turn);
+    dataFile.print(",");
+    dataFile.print(g_vehicle.m_peripherals_headlights);
+    dataFile.print(",");
+    dataFile.print(g_vehicle.m_peripherals_brakelights);
+    dataFile.print(",");
+    dataFile.print(g_vehicle.m_peripherals_hazard);
+    dataFile.print(",");
+    dataFile.print(current);
+    dataFile.print(",");
+    dataFile.print(voltage);
+    dataFile.print(",");
+    dataFile.print(g_vehicle.m_pdb_motor_enabled);
+    dataFile.print(",");
+    dataFile.print(g_vehicle.m_motor_rpm);
+    dataFile.print(",");
+    dataFile.print(g_vehicle.m_throttle_raw);
+    dataFile.print(",");
+    dataFile.print(throttle);
+    dataFile.print(",");
+    dataFile.println(notes);
+
+    dataFile.flush();
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
 }
 
 

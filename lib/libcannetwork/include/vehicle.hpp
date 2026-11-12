@@ -55,6 +55,11 @@ public:
   uint16_t m_joulemeter_current;
   uint16_t m_joulemeter_voltage;
   uint32_t m_joulemeter_energy;
+
+  uint16_t m_comms_board_err;
+  uint16_t m_esc_board_err;
+  uint16_t m_aux_board_err;
+  uint16_t m_pdb_board_err;
   // Private methods unique to architecture for sending/receiving can messages
 private:
 #if defined(ARDUINO_ARCH_ESP32)
