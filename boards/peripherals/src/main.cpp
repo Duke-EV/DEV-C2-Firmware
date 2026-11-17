@@ -21,8 +21,6 @@
 #define CLOCK_PIN 13
 #define DATA_PIN 11
 
-const unsigned int MAX_DIST = 400;
-
 const uint8_t MCP_ADDR = 0x20;
 
 IntervalTimer timer;
