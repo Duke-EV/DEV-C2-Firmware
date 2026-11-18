@@ -13,8 +13,10 @@
 #endif
 #elif defined(CORE_TEENSY)
 #include <FlexCAN_T4.h>
-#include <IntervalTimer.h>
-#include <util/atomic.h>
+// BEGIN PROPOSED CHANGE (inactive)
+// #include <IntervalTimer.h>
+// #include <util/atomic.h>
+// END PROPOSED CHANGE
 #else
 #error "CAN network library note written for chosen architecture"
 #endif // defined
@@ -23,12 +25,15 @@ Vehicle g_vehicle;
 
 #if defined(CORE_TEENSY)
 static FlexCAN_T4FD<CAN3, RX_SIZE_256, TX_SIZE_16> s_teensy_can;
-static IntervalTimer s_can_timer;
-static const uint8_t CAN_QUEUE_SIZE = 32;
-static CANMessage s_can_queue[CAN_QUEUE_SIZE];
-static volatile uint8_t s_can_queue_head = 0;
-static volatile uint8_t s_can_queue_tail = 0;
-#endif
+#endif#endif
+// BEGIN PROPOSED CHANGE (inactive)
+// static IntervalTimer s_can_timer;
+// static const uint8_t CAN_QUEUE_SIZE = 32;
+// static CANMessage s_can_queue[CAN_QUEUE_SIZE];
+// static volatile uint8_t s_can_queue_head = 0;
+// static volatile uint8_t s_can_queue_tail = 0;
+// #endif
+// END PROPOSED CHANGE
 
 #if defined(ARDUINO_ARCH_ESP32)
 void Vehicle::init_network(DevBoard board) {
@@ -93,92 +98,127 @@ bool Vehicle::twai_rx_cb(twai_node_handle_t handle, const twai_rx_done_event_dat
 
 #if defined(CORE_TEENSY)
 void Vehicle::forward_flexcan(const CANFD_message_t &msg) {
-  if (msg.len > sizeof(msg.buf)) return;
-  uint8_t next = (s_can_queue_tail + 1) % CAN_QUEUE_SIZE;
-  if (next != s_can_queue_head) {  // Drop the raw frame if the queue is full.
-    s_can_queue[s_can_queue_tail].id = msg.id;
-    s_can_queue[s_can_queue_tail].len = msg.len;
-    memcpy(s_can_queue[s_can_queue_tail].buf, msg.buf, msg.len);
-    s_can_queue_tail = next;
-  }
+// BEGIN PROPOSED CHANGE (inactive)
+//   if (msg.len > sizeof(msg.buf)) return;
+//   uint8_t next = (s_can_queue_tail + 1) % CAN_QUEUE_SIZE;
+//   if (next != s_can_queue_head) {  // Drop the raw frame if the queue is full.
+//     s_can_queue[s_can_queue_tail].id = msg.id;
+//     s_can_queue[s_can_queue_tail].len = msg.len;
+//     memcpy(s_can_queue[s_can_queue_tail].buf, msg.buf, msg.len);
+//     s_can_queue_tail = next;
+//   }
+// END PROPOSED CHANGE
   g_vehicle.on_receive(msg.id, msg.len, msg.buf);
 }
 
-bool Vehicle::read_message(CANMessage &msg) {
-  // Restore the previous interrupt state, even if the caller disabled interrupts.
-  uint32_t interrupt_state = __get_primask();
-  __disable_irq();
-  if (s_can_queue_head == s_can_queue_tail) {
-    __set_primask(interrupt_state);
-    return false;
-  }
-  msg = s_can_queue[s_can_queue_head];
-  s_can_queue_head = (s_can_queue_head + 1) % CAN_QUEUE_SIZE;
-  __set_primask(interrupt_state);
-  return true;
-}
-
-void Vehicle::service_network() {
-  s_teensy_can.events();
-}
-
+// BEGIN PROPOSED CHANGE (inactive)
+// bool Vehicle::read_message(CANMessage &msg) {
+//   // Restore the previous interrupt state, even if the caller disabled interrupts.
+//   uint32_t interrupt_state = __get_primask();
+//   __disable_irq();
+//   if (s_can_queue_head == s_can_queue_tail) {
+//     __set_primask(interrupt_state);
+//     return false;
+//   }
+//   msg = s_can_queue[s_can_queue_head];
+//   s_can_queue_head = (s_can_queue_head + 1) % CAN_QUEUE_SIZE;
+//   __set_primask(interrupt_state);
+//   return true;
+// }
+//
+// void Vehicle::service_network() {
+//   s_teensy_can.events();
+// }
+//
+// END PROPOSED CHANGE
 void Vehicle::init_network(DevBoard board) {
   m_board = board;
-  m_network_ready = false;
-  s_can_timer.end();
+// BEGIN PROPOSED CHANGE (inactive)
+//   m_network_ready = false;
+//   s_can_timer.end();
+// END PROPOSED CHANGE
   s_teensy_can.begin();
-  CANFD_timings_t config;
-  config.baudrate = 500000;
-  config.baudrateFD = 2000000;
-  m_network_error = CAN_NETWORK_TIMING_ERROR;
-  if (!s_teensy_can.setBaudRate(config)) return;
+// BEGIN PROPOSED CHANGE (inactive)
+//   CANFD_timings_t config;
+//   config.baudrate = 500000;
+//   config.baudrateFD = 2000000;
+//   m_network_error = CAN_NETWORK_TIMING_ERROR;
+//   if (!s_teensy_can.setBaudRate(config)) return;
+// END PROPOSED CHANGE
   s_teensy_can.setRegions(64);
+  s_teensy_can.setBaudRateData(2000000);
+  s_teensy_can.setBaudRate(500000);
+  s_teensy_can.enableFIFO(true);
+  s_teensy_can.enableFIFOInterrupt();
+// BEGIN PROPOSED CHANGE (inactive)
+// Proposed removal: delete the original line(s) immediately above.
+// END PROPOSED CHANGE
   s_teensy_can.onReceive(forward_flexcan);
-  // Queue received frames for processing by the library's timer.
-  s_teensy_can.events();
-  m_network_error = CAN_NETWORK_TIMER_ERROR;
-  if (!s_can_timer.begin(service_network, 1000)) return;
-  m_network_ready = true;
-  m_network_error = CAN_NETWORK_OK;
-  s_teensy_can.enableMBInterrupts();
+// BEGIN PROPOSED CHANGE (inactive)
+//   // Queue received frames for processing by the library's timer.
+//   s_teensy_can.events();
+//   m_network_error = CAN_NETWORK_TIMER_ERROR;
+//   if (!s_can_timer.begin(service_network, 1000)) return;
+//   m_network_ready = true;
+//   m_network_error = CAN_NETWORK_OK;
+//   s_teensy_can.enableMBInterrupts();
+// END PROPOSED CHANGE
 }
 
 void Vehicle::send_message(uint32_t id, uint8_t len, const uint8_t *data) {
+  // TODO: align with ESP32 implementation once message layout exists
+// BEGIN PROPOSED CHANGE (inactive)
+// Proposed removal: delete the original line(s) immediately above.
+// END PROPOSED CHANGE
   CANFD_message_t msg = {};
-  if (!m_network_ready) {
-    return;  // Preserve the initialization error for the application to report.
-  }
-  if (id > 0x7FF || len > sizeof(msg.buf) || (len > 0 && data == nullptr)) {
-    m_network_error = CAN_NETWORK_INVALID_MESSAGE;
-    return;
-  }
-
+// BEGIN PROPOSED CHANGE (inactive)
+//   if (!m_network_ready) {
+//     return;  // Preserve the initialization error for the application to report.
+//   }
+//   if (id > 0x7FF || len > sizeof(msg.buf) || (len > 0 && data == nullptr)) {
+//     m_network_error = CAN_NETWORK_INVALID_MESSAGE;
+//     return;
+//   }
+//
+// END PROPOSED CHANGE
   msg.id = id;
   msg.len = len;
-  // CAN FD uses fixed payload sizes above eight bytes. The buffer starts at zero.
-  if (len > 48) msg.len = 64;
-  else if (len > 32) msg.len = 48;
-  else if (len > 24) msg.len = 32;
-  else if (len > 20) msg.len = 24;
-  else if (len > 16) msg.len = 20;
-  else if (len > 12) msg.len = 16;
-  else if (len > 8) msg.len = 12;
-
+// BEGIN PROPOSED CHANGE (inactive)
+//   // CAN FD uses fixed payload sizes above eight bytes. The buffer starts at zero.
+//   if (len > 48) msg.len = 64;
+//   else if (len > 32) msg.len = 48;
+//   else if (len > 24) msg.len = 32;
+//   else if (len > 20) msg.len = 24;
+//   else if (len > 16) msg.len = 20;
+//   else if (len > 12) msg.len = 16;
+//   else if (len > 8) msg.len = 12;
+//
+// END PROPOSED CHANGE
   msg.flags.extended = 0;  // Use standard 11-bit IDs (set to 1 for 29-bit extended)
+  msg.flags.remote = 0;    // Not a remote frame
+// BEGIN PROPOSED CHANGE (inactive)
+// Proposed removal: delete the original line(s) immediately above.
+// END PROPOSED CHANGE
   msg.brs = 1;
   msg.edl = 1;
   msg.seq = 0;             // Not using sequential mode
 
-  if (len > 0) {
-    memcpy(msg.buf, data, len);
-  }
+  memcpy(msg.buf, data, len);
+// BEGIN PROPOSED CHANGE (inactive)
+//   if (len > 0) {
+//     memcpy(msg.buf, data, len);
+//   }
+// END PROPOSED CHANGE
 
-  // Acceptance by the driver does not confirm delivery on the physical bus.
-  if (!s_teensy_can.write(msg)) {
-    m_network_error = CAN_NETWORK_TX_REJECTED;
-    return;
-  }
-  m_network_error = CAN_NETWORK_OK;
+  s_teensy_can.write(msg);
+// BEGIN PROPOSED CHANGE (inactive)
+//   // Acceptance by the driver does not confirm delivery on the physical bus.
+//   if (!s_teensy_can.write(msg)) {
+//     m_network_error = CAN_NETWORK_TX_REJECTED;
+//     return;
+//   }
+//   m_network_error = CAN_NETWORK_OK;
+// END PROPOSED CHANGE
 }
 #endif // defined(CORE_TEENSY)
 

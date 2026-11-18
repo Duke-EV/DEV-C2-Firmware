@@ -49,21 +49,23 @@ struct MsgJoulemeter {
 
 #pragma pack(pop)
 
-struct CANMessage {
-  uint32_t id;
-  uint8_t len;
-  uint8_t buf[64];
-};
-
-enum CANNetworkError {
-  CAN_NETWORK_OK,
-  CAN_NETWORK_NOT_READY,
-  CAN_NETWORK_TIMING_ERROR,
-  CAN_NETWORK_TIMER_ERROR,
-  CAN_NETWORK_INVALID_MESSAGE,
-  CAN_NETWORK_TX_REJECTED,
-};
-
+// BEGIN PROPOSED CHANGE (inactive)
+// struct CANMessage {
+//   uint32_t id;
+//   uint8_t len;
+//   uint8_t buf[64];
+// };
+//
+// enum CANNetworkError {
+//   CAN_NETWORK_OK,
+//   CAN_NETWORK_NOT_READY,
+//   CAN_NETWORK_TIMING_ERROR,
+//   CAN_NETWORK_TIMER_ERROR,
+//   CAN_NETWORK_INVALID_MESSAGE,
+//   CAN_NETWORK_TX_REJECTED,
+// };
+//
+// END PROPOSED CHANGE
 enum DevBoard {
   COMMUNICATIONS,
   PERIPHERALS,
@@ -114,13 +116,19 @@ private:
   static void twai_receive_task(void *args);
 #elif defined(CORE_TEENSY)
   static void forward_flexcan(const CANFD_message_t &msg);
-  static void service_network();
+// BEGIN PROPOSED CHANGE (inactive)
+//   static void service_network();
+// END PROPOSED CHANGE
 #else
 #error "CAN network library not written for chosen architecture"
 #endif
 
   // Private methods common between architectures
 private:
+  void send_message(uint32_t id, uint8_t len, const uint8_t *data);
+// BEGIN PROPOSED CHANGE (inactive)
+// Proposed removal: delete the original line(s) immediately above.
+// END PROPOSED CHANGE
   #if defined(ARDUINO_ARCH_ESP32)
     static bool twai_rx_cb(twai_node_handle_t handle, const twai_rx_done_event_data_t *edata, void *user_ctx);
   #endif
@@ -130,12 +138,14 @@ private:
 public:
   void init_network(DevBoard board);
   void send_all();
-  void send_message(uint32_t id, uint8_t len, const uint8_t *data);
-  #if defined(CORE_TEENSY)
-  bool read_message(CANMessage &msg);
-  bool m_network_ready = false;
-  CANNetworkError m_network_error = CAN_NETWORK_NOT_READY;
-  #endif
+// BEGIN PROPOSED CHANGE (inactive)
+//   void send_message(uint32_t id, uint8_t len, const uint8_t *data);
+//   #if defined(CORE_TEENSY)
+//   bool read_message(CANMessage &msg);
+//   bool m_network_ready = false;
+//   CANNetworkError m_network_error = CAN_NETWORK_NOT_READY;
+//   #endif
+// END PROPOSED CHANGE
   #if defined(ARDUINO_ARCH_ESP32)
   twai_node_handle_t m_twai_handle; //
   esp_err_t m_last_error;
