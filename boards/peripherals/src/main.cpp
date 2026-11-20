@@ -135,10 +135,6 @@ void setup() {
   mcp.pinMode(sRunning, INPUT);
   mcp.pinMode(sHorn, INPUT);
 
-  mcp.pinMode(TRIG_PIN, OUTPUT);
-  mcp.digitalWrite(TRIG_PIN, LOW);
-  mcp.pinMode(ECHO_PIN, INPUT);
-
   pinMode(LATCH_PIN, OUTPUT);
   digitalWrite(LATCH_PIN, LOW);
   pinMode(CLOCK_PIN, OUTPUT);
