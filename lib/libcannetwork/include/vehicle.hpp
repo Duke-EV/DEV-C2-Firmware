@@ -1,8 +1,8 @@
 #pragma once
 #include <stdint.h>
-
 #if defined(ARDUINO_ARCH_ESP32)
-#include <ESP32-TWAI-CAN.hpp>
+// Moving to CANFD documenation is here https://docs.espressif.com/projects/esp-idf/en/latest/esp32c5/api-reference/peripherals/twai.html
+#include "driver/twai.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #elif defined(CORE_TEENSY)
@@ -10,6 +10,45 @@
 #else
 #error "CAN network library not written for chosen architecture"
 #endif // defined
+
+#pragma pack(push, 1) 
+struct MsgPeripherals {
+  uint8_t heartbeat;
+  uint8_t windshield;
+  uint8_t backrunninglights;
+  uint8_t turn;
+  uint8_t headlights;
+  uint8_t brakelights;
+  uint8_t hazard;
+  uint16_t slope;
+};
+
+struct MsgPDB {
+  uint8_t heartbeat;
+  uint16_t current;
+  uint16_t voltage;
+  uint8_t motor_enabled;
+};
+
+struct MsgMotor {
+  uint8_t heartbeat;
+  uint32_t rpm;
+};
+
+struct MsgThrottle {
+  uint8_t heartbeat;
+  uint16_t raw;
+  uint16_t average;
+};
+
+struct MsgJoulemeter {
+  uint8_t heartbeat;
+  uint16_t current;
+  uint16_t voltage;
+  uint32_t energy;
+};
+
+#pragma pack(pop)
 
 enum DevBoard {
   COMMUNICATIONS,
@@ -42,6 +81,7 @@ public:
   uint8_t m_peripherals_headlights;
   uint8_t m_peripherals_brakelights;
   uint8_t m_peripherals_hazard;
+  uint16_t m_peripherals_slope;
 
   uint16_t m_pdb_current;
   uint16_t m_pdb_voltage;
@@ -60,7 +100,7 @@ private:
 #if defined(ARDUINO_ARCH_ESP32)
   static void twai_receive_task(void *args);
 #elif defined(CORE_TEENSY)
-  static void forward_flexcan(const CAN_message_t &msg);
+  static void forward_flexcan(const CANFD_message_t &msg);
 #else
 #error "CAN network library not written for chosen architecture"
 #endif
@@ -68,6 +108,9 @@ private:
   // Private methods common between architectures
 private:
   void send_message(uint32_t id, uint8_t len, const uint8_t *data);
+  #if defined(ARDUINO_ARCH_ESP32)
+    static bool twai_rx_cb(twai_node_handle_t handle, const twai_rx_done_event_data_t *edata, void *user_ctx);
+  #endif
   void on_receive(uint32_t id, uint8_t len, const uint8_t *data);
 
   // Public entry point
@@ -75,6 +118,7 @@ public:
   void init_network(DevBoard board);
   void send_all();
   #if defined(ARDUINO_ARCH_ESP32)
+  twai_node_handle_t m_twai_handle; //
   esp_err_t m_last_error;
   #endif
 };
